@@ -1,0 +1,6 @@
+{
+  "name": "Miyuki Patrones",
+  "description": "Visualizador y generador de patrones de pulseras en técnicas de telar, peyote y brick stitch con delicas Miyuki.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

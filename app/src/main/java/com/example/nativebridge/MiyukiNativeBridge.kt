@@ -1,0 +1,25 @@
+package com.example.nativebridge
+
+object MiyukiNativeBridge {
+    private var isLoaded = false
+    private var loadError: String? = null
+
+    init {
+        try {
+            System.loadLibrary("miyuki_native")
+            isLoaded = true
+        } catch (e: Throwable) {
+            loadError = e.message
+            isLoaded = false
+        }
+    }
+
+    fun isNativeLoaded(): Boolean = isLoaded
+    fun getLoadError(): String? = loadError
+
+    external fun getNativeEngineStatus(): String
+    external fun executeLuaSnippet(script: String): String
+    external fun executeLuaPatternScript(script: String, columns: Int, rows: Int): IntArray
+    external fun calculateEarringFringesRust(baseWidth: Int, maxFringeLen: Int, minFringeLen: Int, style: Int): IntArray
+    external fun calculateEarringTriangleRowsRust(baseWidth: Int): Int
+}

@@ -1,0 +1,97 @@
+name: Compilar APK Debug (C++, Rust, Lua)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk-debug:
+    name: Compilación APK Debug Sin Cache
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga del código fuente completo del repositorio
+      - name: Descargar código fuente (Checkout)
+        uses: actions/checkout@v4
+
+      # 2. Configuración de Java JDK 21
+      - name: Configurar Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # 3. Instalación de NDK de Android y CMake para C++ y Lua
+      - name: Instalar Android NDK y CMake
+        run: |
+          echo "==> Instalando Android NDK 26.1.10909125 y CMake 3.22.1..."
+          yes | sdkmanager --install "ndk;26.1.10909125" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+
+      # 4. Instalación del Toolchain de Rust y destinos de compilación cruzada
+      - name: Instalar Rust y destinos Android
+        run: |
+          echo "==> Instalando Rust y cargando variables de entorno..."
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          source "$HOME/.cargo/env"
+          rustup target add aarch64-linux-android x86_64-linux-android
+          rustc --version
+          cargo --version
+
+      # 5. Verificación de dependencias de C++, Lua y Rust presentes en el árbol
+      - name: Verificar dependencias C++, Lua y Rust
+        run: |
+          echo "==> Verificando fuentes de Lua 5.4 ANSI C:"
+          ls -la app/src/main/cpp/lua/*.c | head -n 5
+          echo "==> Verificando motor C++ JNI:"
+          ls -la app/src/main/cpp/miyuki_engine.cpp
+          echo "==> Verificando crate de Rust:"
+          ls -la app/src/main/rust/miyuki_rust/Cargo.toml
+
+      # 6. Configuración de Gradle (Estricto: SIN CACHE)
+      - name: Configurar Gradle (Cache Deshabilitado)
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '9.3.1'
+          cache-disabled: true
+
+      # 7. Generación obligatoria e inmediata del archivo de firma Debug (.sh)
+      - name: Generar firma Debug desde cero (sin esperas)
+        run: |
+          chmod +x ./generate_debug_keystore.sh
+          ./generate_debug_keystore.sh
+
+      # 8. Compilación del APK Debug (100% Sin Cache)
+      - name: Compilar APK Debug
+        run: |
+          source "$HOME/.cargo/env" || true
+          gradle assembleDebug \
+            --no-build-cache \
+            --no-configuration-cache \
+            --rerun-tasks \
+            --stacktrace
+
+      # 9. Verificación de artefacto generado
+      - name: Inspeccionar APK Debug compilado
+        run: |
+          echo "==> APK Debug generado exitosamente:"
+          ls -lh app/build/outputs/apk/debug/
+          find app/build/outputs/apk/debug/ -name "*.apk"
+
+      # 10. Subida del APK Debug como artefacto de GitHub Actions
+      - name: Subir APK Debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: miyuki-patrones-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
