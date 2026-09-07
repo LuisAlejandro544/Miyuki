@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <queue>
 #include <sstream>
 #include <android/log.h>
 
@@ -291,6 +292,10 @@ static inline float delta_e_squared(const LabColor& c1, const LabColor& c2) {
     return dl * dl + da * da + db * db;
 }
 
+static inline float delta_e_cie76(const LabColor& c1, const LabColor& c2) {
+    return std::sqrt(delta_e_squared(c1, c2));
+}
+
 // 20 Official Miyuki Delica 11/0 Beads catalog colors (Hex ARGB)
 static const std::vector<uint32_t>& get_official_miyuki_colors() {
     static const std::vector<uint32_t> kBeads = {
@@ -426,7 +431,9 @@ Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
     jfloat brightness,
     jfloat contrast,
     jboolean useDithering,
-    jint maxColors
+    jint maxColors,
+    jint backgroundMode,
+    jfloat bgTolerance
 ) {
     if (!srcPixels || srcWidth <= 0 || srcHeight <= 0 || targetCols <= 0 || targetRows <= 0) {
         return env->NewIntArray(0);
@@ -452,7 +459,233 @@ Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
 
     env->ReleaseIntArrayElements(srcPixels, rawSrc, JNI_ABORT);
 
-    // 2. Select active palette (if maxColors is set and smaller than catalog, find dominant colors)
+    // 2. Intelligent Background Segmentation (White & AI Local Surface/Table Detection)
+    std::vector<bool> is_background(totalTarget, false);
+
+    if (backgroundMode == 1) {
+        // MODE 1: IGNORAR FONDO BLANCO / CLARO (Lienzos, papel, dibujos, sprites)
+        std::vector<bool> white_candidates(totalTarget, false);
+        for (int i = 0; i < totalTarget; ++i) {
+            uint32_t px = resizedPixels[i];
+            uint8_t a = (px >> 24) & 0xFF;
+            float r = static_cast<float>((px >> 16) & 0xFF);
+            float g = static_cast<float>((px >> 8) & 0xFF);
+            float b = static_cast<float>(px & 0xFF);
+
+            if (a < 32) {
+                white_candidates[i] = true;
+                continue;
+            }
+
+            LabColor lab = rgb_to_lab(r, g, b);
+            float l_threshold = 100.0f - (bgTolerance * 0.40f);
+            float chroma_sq = lab.a * lab.a + lab.b * lab.b;
+
+            bool is_bright_white = (lab.l >= l_threshold && chroma_sq < 220.0f);
+            bool is_high_rgb = (r > 220.0f && g > 220.0f && b > 220.0f && std::abs(r - g) < 22.0f && std::abs(g - b) < 22.0f);
+
+            if (is_bright_white || is_high_rgb) {
+                white_candidates[i] = true;
+            }
+        }
+
+        // Flood-fill desde los 4 bordes para segmentar el fondo exterior continuo
+        std::queue<int> q;
+        for (int x = 0; x < targetCols; ++x) {
+            int top = 0 * targetCols + x;
+            int bot = (targetRows - 1) * targetCols + x;
+            if (white_candidates[top] && !is_background[top]) { is_background[top] = true; q.push(top); }
+            if (white_candidates[bot] && !is_background[bot]) { is_background[bot] = true; q.push(bot); }
+        }
+        for (int y = 0; y < targetRows; ++y) {
+            int left = y * targetCols + 0;
+            int right = y * targetCols + (targetCols - 1);
+            if (white_candidates[left] && !is_background[left]) { is_background[left] = true; q.push(left); }
+            if (white_candidates[right] && !is_background[right]) { is_background[right] = true; q.push(right); }
+        }
+
+        const int dx[4] = {1, -1, 0, 0};
+        const int dy[4] = {0, 0, 1, -1};
+        while (!q.empty()) {
+            int curr = q.front();
+            q.pop();
+            int cx = curr % targetCols;
+            int cy = curr / targetCols;
+            for (int dir = 0; dir < 4; ++dir) {
+                int nx = cx + dx[dir];
+                int ny = cy + dy[dir];
+                if (nx >= 0 && nx < targetCols && ny >= 0 && ny < targetRows) {
+                    int nidx = ny * targetCols + nx;
+                    if (white_candidates[nidx] && !is_background[nidx]) {
+                        is_background[nidx] = true;
+                        q.push(nidx);
+                    }
+                }
+            }
+        }
+
+        // Limpieza de orillas con blanco casi puro aislado
+        for (int i = 0; i < totalTarget; ++i) {
+            uint32_t px = resizedPixels[i];
+            float r = static_cast<float>((px >> 16) & 0xFF);
+            float g = static_cast<float>((px >> 8) & 0xFF);
+            float b = static_cast<float>(px & 0xFF);
+            if (r > 246.0f && g > 246.0f && b > 246.0f) {
+                is_background[i] = true;
+            }
+        }
+    } else if (backgroundMode == 2) {
+        // MODE 2: AI LOCAL INTELIGENTE - SEGMENTACIÓN MULTI-CENTROIDE K-MEANS & SALIENCY MAP
+        // 1. Muestreo Perimetral Estratificado de la Superficie
+        std::vector<LabColor> border_samples;
+        border_samples.reserve(targetCols * 4 + targetRows * 4);
+
+        auto add_sample = [&](int x, int y) {
+            if (x >= 0 && x < targetCols && y >= 0 && y < targetRows) {
+                uint32_t px = resizedPixels[y * targetCols + x];
+                float r = static_cast<float>((px >> 16) & 0xFF);
+                float g = static_cast<float>((px >> 8) & 0xFF);
+                float b = static_cast<float>(px & 0xFF);
+                border_samples.push_back(rgb_to_lab(r, g, b));
+            }
+        };
+
+        for (int x = 0; x < targetCols; ++x) {
+            add_sample(x, 0);
+            if (targetRows > 1) add_sample(x, 1);
+            if (targetRows > 2) add_sample(x, targetRows - 1);
+            if (targetRows > 3) add_sample(x, targetRows - 2);
+        }
+        for (int y = 0; y < targetRows; ++y) {
+            add_sample(0, y);
+            if (targetCols > 1) add_sample(1, y);
+            if (targetCols > 2) add_sample(targetCols - 1, y);
+            if (targetCols > 3) add_sample(targetCols - 2, y);
+        }
+
+        // 2. Clustering K-Means (K=3) para capturar texturas complejas (vetas de madera, mantel, sombras)
+        const int K = 3;
+        std::vector<LabColor> centroids;
+        centroids.reserve(K);
+
+        if (!border_samples.empty()) {
+            // Inicialización de centroides (K-Means++ o dispersos en el muestreo)
+            size_t step = border_samples.size() / K;
+            for (int k = 0; k < K; ++k) {
+                centroids.push_back(border_samples[std::min(k * step, border_samples.size() - 1)]);
+            }
+
+            // 6 iteraciones rápidas de convergencia EM (Expectation-Maximization)
+            for (int iter = 0; iter < 6; ++iter) {
+                std::vector<LabColor> accum(K, {0.0f, 0.0f, 0.0f});
+                std::vector<int> counts(K, 0);
+
+                for (const auto& sample : border_samples) {
+                    int best_k = 0;
+                    float min_dist = delta_e_squared(sample, centroids[0]);
+                    for (int k = 1; k < K; ++k) {
+                        float d = delta_e_squared(sample, centroids[k]);
+                        if (d < min_dist) {
+                            min_dist = d;
+                            best_k = k;
+                        }
+                    }
+                    accum[best_k].l += sample.l;
+                    accum[best_k].a += sample.a;
+                    accum[best_k].b += sample.b;
+                    counts[best_k]++;
+                }
+
+                for (int k = 0; k < K; ++k) {
+                    if (counts[k] > 0) {
+                        centroids[k].l = accum[k].l / counts[k];
+                        centroids[k].a = accum[k].a / counts[k];
+                        centroids[k].b = accum[k].b / counts[k];
+                    }
+                }
+            }
+        }
+
+        // 3. Mapa de Salicidad (Center-Prior / Saliency) y Clasificación
+        float center_x = (targetCols - 1.0f) / 2.0f;
+        float center_y = (targetRows - 1.0f) / 2.0f;
+        float max_radius_sq = (center_x * center_x + center_y * center_y) + 1.0f;
+
+        std::vector<bool> surface_candidates(totalTarget, false);
+        for (int y = 0; y < targetRows; ++y) {
+            float dy = y - center_y;
+            for (int x = 0; x < targetCols; ++x) {
+                int i = y * targetCols + x;
+                uint32_t px = resizedPixels[i];
+                uint8_t a = (px >> 24) & 0xFF;
+                if (a < 32) {
+                    surface_candidates[i] = true;
+                    continue;
+                }
+
+                float dx = x - center_x;
+                float r_sq = (dx * dx + dy * dy) / max_radius_sq; // 0.0 en centro, ~1.0 en esquinas
+
+                float r = static_cast<float>((px >> 16) & 0xFF);
+                float g = static_cast<float>((px >> 8) & 0xFF);
+                float b = static_cast<float>(px & 0xFF);
+                LabColor lab = rgb_to_lab(r, g, b);
+
+                // Distancia mínima a cualquiera de los clusters de la superficie
+                float min_delta = 9999.0f;
+                for (const auto& c : centroids) {
+                    float d = delta_e_cie76(lab, c);
+                    if (d < min_delta) min_delta = d;
+                }
+
+                bool is_white = (lab.l > 90.0f && (lab.a * lab.a + lab.b * lab.b) < 180.0f);
+                
+                // Ponderación dinámica de tolerancia: los bordes aceptan más variación de mesa
+                float effective_tolerance = bgTolerance * (0.85f + 0.35f * r_sq);
+
+                if (min_delta <= effective_tolerance || is_white) {
+                    surface_candidates[i] = true;
+                }
+            }
+        }
+
+        // 4. Propagación Conectada (Flood-fill) desde los 4 bordes para blindar el objeto
+        std::queue<int> q;
+        for (int x = 0; x < targetCols; ++x) {
+            int top = 0 * targetCols + x;
+            int bot = (targetRows - 1) * targetCols + x;
+            if (surface_candidates[top] && !is_background[top]) { is_background[top] = true; q.push(top); }
+            if (surface_candidates[bot] && !is_background[bot]) { is_background[bot] = true; q.push(bot); }
+        }
+        for (int y = 0; y < targetRows; ++y) {
+            int left = y * targetCols + 0;
+            int right = y * targetCols + (targetCols - 1);
+            if (surface_candidates[left] && !is_background[left]) { is_background[left] = true; q.push(left); }
+            if (surface_candidates[right] && !is_background[right]) { is_background[right] = true; q.push(right); }
+        }
+
+        const int dx[4] = {1, -1, 0, 0};
+        const int dy[4] = {0, 0, 1, -1};
+        while (!q.empty()) {
+            int curr = q.front();
+            q.pop();
+            int cx = curr % targetCols;
+            int cy = curr / targetCols;
+            for (int dir = 0; dir < 4; ++dir) {
+                int nx = cx + dx[dir];
+                int ny = cy + dy[dir];
+                if (nx >= 0 && nx < targetCols && ny >= 0 && ny < targetRows) {
+                    int nidx = ny * targetCols + nx;
+                    if (surface_candidates[nidx] && !is_background[nidx]) {
+                        is_background[nidx] = true;
+                        q.push(nidx);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Select active palette
     const auto& full_palette = get_cached_miyuki_palette();
     std::vector<MiyukiPaletteEntry> active_palette;
 
@@ -460,6 +693,7 @@ Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
         std::vector<int> counts(full_palette.size(), 0);
         int step = std::max(1, totalTarget / 400);
         for (int i = 0; i < totalTarget; i += step) {
+            if (is_background[i]) continue; // No contar píxeles de fondo
             uint32_t px = resizedPixels[i];
             float r = static_cast<float>((px >> 16) & 0xFF);
             float g = static_cast<float>((px >> 8) & 0xFF);
@@ -494,7 +728,7 @@ Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
         active_palette = full_palette;
     }
 
-    // 3. Floyd-Steinberg error diffusion in RGB buffer
+    // 4. Floyd-Steinberg error diffusion in RGB buffer with isolated foreground
     struct PixelF { float r, g, b; };
     std::vector<PixelF> rgb_buf(totalTarget);
     for (int i = 0; i < totalTarget; ++i) {
@@ -511,6 +745,11 @@ Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
     for (int y = 0; y < targetRows; ++y) {
         for (int x = 0; x < targetCols; ++x) {
             int idx = y * targetCols + x;
+            if (is_background[idx]) {
+                outBeads[idx] = 0; // Celda vacía / sin cuenta (transparente)
+                continue;
+            }
+
             float r = std::clamp(rgb_buf[idx].r, 0.0f, 255.0f);
             float g = std::clamp(rgb_buf[idx].g, 0.0f, 255.0f);
             float b = std::clamp(rgb_buf[idx].b, 0.0f, 255.0f);
@@ -524,43 +763,27 @@ Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
                 float err_g = g - chosen.g;
                 float err_b = b - chosen.b;
 
-                // Floyd-Steinberg error distribution:
-                // (x + 1, y)     += err * 7/16
-                // (x - 1, y + 1) += err * 3/16
-                // (x,     y + 1) += err * 5/16
-                // (x + 1, y + 1) += err * 1/16
+                // Difundir error solo a celdas que también sean parte del objeto (no al fondo)
+                auto diffuse_if_valid = [&](int nx, int ny, float weight) {
+                    if (nx >= 0 && nx < targetCols && ny >= 0 && ny < targetRows) {
+                        int n_idx = ny * targetCols + nx;
+                        if (!is_background[n_idx]) {
+                            rgb_buf[n_idx].r += err_r * weight;
+                            rgb_buf[n_idx].g += err_g * weight;
+                            rgb_buf[n_idx].b += err_b * weight;
+                        }
+                    }
+                };
 
-                if (x + 1 < targetCols) {
-                    int n_idx = idx + 1;
-                    rgb_buf[n_idx].r += err_r * (7.0f / 16.0f);
-                    rgb_buf[n_idx].g += err_g * (7.0f / 16.0f);
-                    rgb_buf[n_idx].b += err_b * (7.0f / 16.0f);
-                }
-                if (y + 1 < targetRows) {
-                    if (x > 0) {
-                        int n_idx = (y + 1) * targetCols + (x - 1);
-                        rgb_buf[n_idx].r += err_r * (3.0f / 16.0f);
-                        rgb_buf[n_idx].g += err_g * (3.0f / 16.0f);
-                        rgb_buf[n_idx].b += err_b * (3.0f / 16.0f);
-                    }
-                    {
-                        int n_idx = (y + 1) * targetCols + x;
-                        rgb_buf[n_idx].r += err_r * (5.0f / 16.0f);
-                        rgb_buf[n_idx].g += err_g * (5.0f / 16.0f);
-                        rgb_buf[n_idx].b += err_b * (5.0f / 16.0f);
-                    }
-                    if (x + 1 < targetCols) {
-                        int n_idx = (y + 1) * targetCols + (x + 1);
-                        rgb_buf[n_idx].r += err_r * (1.0f / 16.0f);
-                        rgb_buf[n_idx].g += err_g * (1.0f / 16.0f);
-                        rgb_buf[n_idx].b += err_b * (1.0f / 16.0f);
-                    }
-                }
+                diffuse_if_valid(x + 1, y, 7.0f / 16.0f);
+                diffuse_if_valid(x - 1, y + 1, 3.0f / 16.0f);
+                diffuse_if_valid(x, y + 1, 5.0f / 16.0f);
+                diffuse_if_valid(x + 1, y + 1, 1.0f / 16.0f);
             }
         }
     }
 
-    // 4. Return native result directly to Kotlin
+    // 5. Return native result directly to Kotlin
     jintArray result = env->NewIntArray(totalTarget);
     env->SetIntArrayRegion(result, 0, totalTarget, reinterpret_cast<const jint*>(outBeads.data()));
     return result;

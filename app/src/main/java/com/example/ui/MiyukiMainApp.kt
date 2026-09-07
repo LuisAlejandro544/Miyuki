@@ -71,6 +71,8 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
     val photoContrast by viewModel.photoContrast.collectAsStateWithLifecycle()
     val photoDithering by viewModel.photoDithering.collectAsStateWithLifecycle()
     val photoMaxColors by viewModel.photoMaxColors.collectAsStateWithLifecycle()
+    val photoBackgroundMode by viewModel.photoBackgroundMode.collectAsStateWithLifecycle()
+    val photoBackgroundTolerance by viewModel.photoBackgroundTolerance.collectAsStateWithLifecycle()
     val isPhotoProcessing by viewModel.isPhotoProcessing.collectAsStateWithLifecycle()
 
     val pdfSourceBitmap by viewModel.pdfSourceBitmap.collectAsStateWithLifecycle()
@@ -278,9 +280,11 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
                         photoContrast = photoContrast,
                         photoDithering = photoDithering,
                         photoMaxColors = photoMaxColors,
+                        photoBackgroundMode = photoBackgroundMode,
+                        photoBackgroundTolerance = photoBackgroundTolerance,
                         isPhotoProcessing = isPhotoProcessing,
-                        onUpdatePhotoParams = { c, r, b, cont, d, m ->
-                            viewModel.updatePhotoParams(c, r, b, cont, d, m)
+                        onUpdatePhotoParams = { c, r, b, cont, d, m, bgMode, bgTol ->
+                            viewModel.updatePhotoParams(c, r, b, cont, d, m, bgMode, bgTol)
                         },
                         onConvertBitmapToPattern = { bmp, title ->
                             viewModel.convertBitmapToPattern(bmp, title)

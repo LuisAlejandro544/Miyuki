@@ -587,6 +587,13 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
     private val _photoMaxColors = MutableStateFlow(12)
     val photoMaxColors: StateFlow<Int> = _photoMaxColors.asStateFlow()
 
+    // 0: Sin filtro (Lienzo completo), 1: Ignorar Fondo Blanco/Claro, 2: AI Local (Detectar y Eliminar Mesa/Fondo)
+    private val _photoBackgroundMode = MutableStateFlow(1)
+    val photoBackgroundMode: StateFlow<Int> = _photoBackgroundMode.asStateFlow()
+
+    private val _photoBackgroundTolerance = MutableStateFlow(24.0f)
+    val photoBackgroundTolerance: StateFlow<Float> = _photoBackgroundTolerance.asStateFlow()
+
     private val _isPhotoProcessing = MutableStateFlow(false)
     val isPhotoProcessing: StateFlow<Boolean> = _isPhotoProcessing.asStateFlow()
 
@@ -596,7 +603,9 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
         brightness: Float? = null,
         contrast: Float? = null,
         dithering: Boolean? = null,
-        maxColors: Int? = null
+        maxColors: Int? = null,
+        bgMode: Int? = null,
+        bgTolerance: Float? = null
     ) {
         if (cols != null) _photoTargetCols.value = cols
         if (rows != null) _photoTargetRows.value = rows
@@ -604,6 +613,8 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
         if (contrast != null) _photoContrast.value = contrast
         if (dithering != null) _photoDithering.value = dithering
         if (maxColors != null) _photoMaxColors.value = maxColors
+        if (bgMode != null) _photoBackgroundMode.value = bgMode
+        if (bgTolerance != null) _photoBackgroundTolerance.value = bgTolerance
     }
 
     fun convertBitmapToPattern(bitmap: android.graphics.Bitmap, patternTitle: String = "Foto a Patrón Miyuki") {
@@ -622,6 +633,8 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
                 val contrast = _photoContrast.value
                 val dithering = _photoDithering.value
                 val maxColors = _photoMaxColors.value
+                val bgMode = _photoBackgroundMode.value
+                val bgTolerance = _photoBackgroundTolerance.value
 
                 val quantizedGrid = MiyukiNativeBridge.convertPhotoToPatternNative(
                     srcPixels = pixels,
@@ -632,7 +645,9 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
                     brightness = brightness,
                     contrast = contrast,
                     useDithering = dithering,
-                    maxColors = maxColors
+                    maxColors = maxColors,
+                    backgroundMode = bgMode,
+                    bgTolerance = bgTolerance
                 )
 
                 if (quantizedGrid.isNotEmpty()) {

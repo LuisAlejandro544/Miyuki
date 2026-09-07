@@ -228,7 +228,22 @@ private fun DrawScope.drawSingleDelica(
     isActiveRow: Boolean
 ) {
     val cornerRadius = CornerRadius(width * 0.25f, width * 0.25f)
-    val beadColor = if (colorInt != 0 && colorInt != -1) Color(colorInt) else Color(0xFFE8E5DD)
+    // If cell is transparent/empty (ignored background or empty cell)
+    if (colorInt == 0 || colorInt == -1) {
+        if (isActiveRow) {
+            // Draw subtle dashed outline to guide the weaver that this position is skipped
+            drawRoundRect(
+                color = Color(0xFFD4AF37).copy(alpha = 0.35f),
+                topLeft = Offset(x, y),
+                size = Size(width, height),
+                cornerRadius = cornerRadius,
+                style = Stroke(width = 1.0f)
+            )
+        }
+        return
+    }
+
+    val beadColor = Color(colorInt)
 
     // Bead Body with subtle cylindrical glass gradient
     val cylinderBrush = Brush.horizontalGradient(

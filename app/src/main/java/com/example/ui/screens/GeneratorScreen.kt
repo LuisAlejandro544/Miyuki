@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Bookmark
@@ -149,8 +150,10 @@ fun GeneratorScreen(
     photoContrast: Float = 1.15f,
     photoDithering: Boolean = true,
     photoMaxColors: Int = 12,
+    photoBackgroundMode: Int = 1,
+    photoBackgroundTolerance: Float = 24.0f,
     isPhotoProcessing: Boolean = false,
-    onUpdatePhotoParams: (Int?, Int?, Float?, Float?, Boolean?, Int?) -> Unit = { _, _, _, _, _, _ -> },
+    onUpdatePhotoParams: (Int?, Int?, Float?, Float?, Boolean?, Int?, Int?, Float?) -> Unit = { _, _, _, _, _, _, _, _ -> },
     onConvertBitmapToPattern: (Bitmap, String) -> Unit = { _, _ -> },
     // PDF / Chart Calibration (Native C++20 & Rust)
     pdfSourceBitmap: Bitmap? = null,
@@ -213,6 +216,15 @@ fun GeneratorScreen(
             } catch (e: Exception) {
                 photoLabel = "Error al abrir imagen: ${e.localizedMessage}"
             }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bmp: Bitmap? ->
+        if (bmp != null) {
+            selectedBitmap = bmp
+            photoLabel = "Foto capturada con Cámara (${bmp.width}x${bmp.height} px)"
         }
     }
 
@@ -707,20 +719,40 @@ fun GeneratorScreen(
             ) {
                 Button(
                     onClick = {
+                        cameraLauncher.launch(null)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MiyukiGoldDark,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Tomar Foto", fontWeight = FontWeight.SemiBold)
+                }
+
+                Button(
+                    onClick = {
                         photoPickerLauncher.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MiyukiTurquoise,
                         contentColor = Color.White
                     )
                 ) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Abrir Galería", fontWeight = FontWeight.SemiBold)
+                    Text("Galería", fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -833,7 +865,7 @@ fun GeneratorScreen(
             )
             Slider(
                 value = photoTargetCols.toFloat(),
-                onValueChange = { onUpdatePhotoParams(it.toInt(), null, null, null, null, null) },
+                onValueChange = { onUpdatePhotoParams(it.toInt(), null, null, null, null, null, null, null) },
                 valueRange = 10f..60f,
                 steps = 49
             )
@@ -845,7 +877,7 @@ fun GeneratorScreen(
             )
             Slider(
                 value = photoTargetRows.toFloat(),
-                onValueChange = { onUpdatePhotoParams(null, it.toInt(), null, null, null, null) },
+                onValueChange = { onUpdatePhotoParams(null, it.toInt(), null, null, null, null, null, null) },
                 valueRange = 10f..100f,
                 steps = 89
             )
@@ -860,7 +892,7 @@ fun GeneratorScreen(
             Text("Contraste: ${String.format("%.2f", photoContrast)}x", fontWeight = FontWeight.SemiBold)
             Slider(
                 value = photoContrast,
-                onValueChange = { onUpdatePhotoParams(null, null, null, it, null, null) },
+                onValueChange = { onUpdatePhotoParams(null, null, null, it, null, null, null, null) },
                 valueRange = 0.5f..2.5f
             )
 
@@ -868,7 +900,7 @@ fun GeneratorScreen(
             Text("Brillo: ${photoBrightness.toInt()}", fontWeight = FontWeight.SemiBold)
             Slider(
                 value = photoBrightness,
-                onValueChange = { onUpdatePhotoParams(null, null, it, null, null, null) },
+                onValueChange = { onUpdatePhotoParams(null, null, it, null, null, null, null, null) },
                 valueRange = -50f..50f
             )
 
@@ -893,7 +925,7 @@ fun GeneratorScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Switch(
                     checked = photoDithering,
-                    onCheckedChange = { onUpdatePhotoParams(null, null, null, null, it, null) },
+                    onCheckedChange = { onUpdatePhotoParams(null, null, null, null, it, null, null, null) },
                     colors = SwitchDefaults.colors(checkedThumbColor = MiyukiGoldDark)
                 )
             }
@@ -910,9 +942,85 @@ fun GeneratorScreen(
                 listOf(4, 8, 12, 16, 20).forEach { count ->
                     FilterChip(
                         selected = photoMaxColors == count,
-                        onClick = { onUpdatePhotoParams(null, null, null, null, null, count) },
+                        onClick = { onUpdatePhotoParams(null, null, null, null, null, count, null, null) },
                         label = { Text("$count col") },
                         modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 4. Eliminación de Fondo & AI Local (Mesa y Superficie)
+            Text("4. Detección de Fondo & AI Local", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = photoBackgroundMode == 0,
+                        onClick = { onUpdatePhotoParams(null, null, null, null, null, null, 0, null) },
+                        label = { Text("Lienzo Completo", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = photoBackgroundMode == 1,
+                        onClick = { onUpdatePhotoParams(null, null, null, null, null, null, 1, null) },
+                        label = { Text("Quitar Blanco", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = photoBackgroundMode == 2,
+                        onClick = { onUpdatePhotoParams(null, null, null, null, null, null, 2, null) },
+                        label = { Text("AI Mesa/Fondo", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.weight(1.1f)
+                    )
+                }
+
+                Text(
+                    text = when (photoBackgroundMode) {
+                        0 -> "Todo el encuadre se tejerá con cuentas (sin transparencia)."
+                        1 -> "Fondos blancos o muy claros se convierten en espacios vacíos / transparentes (ideal para dibujos y siluetas)."
+                        else -> "✨ AI Local: Segmenta y descarta automáticamente la mesa, mantel o soporte perimetral donde descansa el objeto fotografiado."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (photoBackgroundMode == 2) MiyukiTurquoise else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (photoBackgroundMode != 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Tolerancia de recorte:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            "${photoBackgroundTolerance.toInt()} ΔE",
+                            fontWeight = FontWeight.Bold,
+                            color = MiyukiGoldDark,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Slider(
+                        value = photoBackgroundTolerance,
+                        onValueChange = { onUpdatePhotoParams(null, null, null, null, null, null, null, it) },
+                        valueRange = 10f..50f,
+                        steps = 39
                     )
                 }
             }

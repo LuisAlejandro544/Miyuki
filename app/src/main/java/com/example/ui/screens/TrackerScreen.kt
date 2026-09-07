@@ -102,14 +102,22 @@ fun TrackerScreen(
                 if (rowColors[i] == currColor) {
                     currCount++
                 } else {
-                    val bead = MiyukiCatalog.findClosest(currColor)
-                    runs.add(RowBeadRun(bead.code, bead.name, currColor, currCount))
+                    if (currColor == 0 || currColor == -1) {
+                        runs.add(RowBeadRun("Vacío", "Espacio vacío (Saltar)", 0, currCount))
+                    } else {
+                        val bead = MiyukiCatalog.findClosest(currColor)
+                        runs.add(RowBeadRun(bead.code, bead.name, currColor, currCount))
+                    }
                     currColor = rowColors[i]
                     currCount = 1
                 }
             }
-            val bead = MiyukiCatalog.findClosest(currColor)
-            runs.add(RowBeadRun(bead.code, bead.name, currColor, currCount))
+            if (currColor == 0 || currColor == -1) {
+                runs.add(RowBeadRun("Vacío", "Espacio vacío (Saltar)", 0, currCount))
+            } else {
+                val bead = MiyukiCatalog.findClosest(currColor)
+                runs.add(RowBeadRun(bead.code, bead.name, currColor, currCount))
+            }
         }
         runs
     }
@@ -247,13 +255,26 @@ fun TrackerScreen(
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(run.colorInt))
-                                    .border(1.dp, Color.Black.copy(alpha = 0.2f), CircleShape)
-                            )
+                            if (run.colorInt == 0 || run.colorInt == -1) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.5f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("✕", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(run.colorInt))
+                                        .border(1.dp, Color.Black.copy(alpha = 0.2f), CircleShape)
+                                )
+                            }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "${run.count}x",
@@ -294,13 +315,26 @@ fun TrackerScreen(
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(colorInt))
-                                    .border(1.5.dp, Color.Black.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
-                            )
+                            if (colorInt == 0 || colorInt == -1) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.Transparent)
+                                        .border(1.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(6.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("—", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(colorInt))
+                                        .border(1.5.dp, Color.Black.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+                                )
+                            }
                             Text(
                                 text = "${index + 1}",
                                 style = MaterialTheme.typography.labelSmall,

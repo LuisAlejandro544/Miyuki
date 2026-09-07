@@ -37,7 +37,8 @@ Este documento describe la planificación de versiones, objetivos técnicos y ev
 ## 🚀 Versión 1.1: Conversión de Imágenes y Calibración de Documentos (Completada)
 
 - [x] **Conversor Fotográfico a Patrón de Cuentas (C++20 Nativo)**:
-  - [x] Selector de imágenes local mediante Android Photo Picker (cero permisos invasivos).
+  - [x] Captura directa con cámara en el móvil e importación de fotos con Android Photo Picker (cero permisos invasivos).
+  - [x] **AI Local de Eliminación de Fondo y Superficies**: K-Means clustering ($K=3$), Saliency Map de preservación central y propagación por flood-fill para suprimir mesas de madera, manteles y encimeras.
   - [x] Algoritmo de cuantización de color en C++20 con dithering Floyd-Steinberg y ajuste dinámico de brillo/contraste.
   - [x] Asignación cromática de alta fidelidad al catálogo oficial Miyuki Delica 11/0 mediante distancia perceptual en espacio CIELAB (D65).
 - [x] **Importador y Calibrador de Documentos PDF y Gráficos (Rust + C++20)**:

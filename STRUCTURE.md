@@ -44,13 +44,14 @@ Este documento detalla la estructura física del repositorio, la responsabilidad
 │       │   │   │   └── MiyukiNativeBridge.kt # Declaraciones de métodos C++, Rust y Lua
 │       │   │   └── ui/                 # Capa de presentación (Jetpack Compose)
 │       │   │       ├── MiyukiMainApp.kt      # Contenedor de navegación y barra inferior
+│       │   │       ├── components/           # Componentes visuales reutilizables
+│       │   │       │   └── BeadCanvas.kt     # Lienzo de dibujo y renderizado de cuadrículas (Loom, Peyote, Brick Stitch)
 │       │   │       ├── screens/              # Pantallas de la aplicación
-│       │   │       │   ├── HomeScreen.kt           # Galería de proyectos, creación rápida y métricas
-│       │   │       │   ├── PatternEditorScreen.kt  # Editor táctil con cuadrícula interactiva
-│       │   │       │   ├── PatternTrackerScreen.kt # Tejedor paso a paso con fila activa y hápticos
-│       │   │       │   ├── GeneratorScreen.kt      # Generador algorítmico, Foto a Patrón, Calibrador PDF y Lua
+│       │   │       │   ├── CatalogScreen.kt        # Explorador del catálogo Miyuki Delica 11/0
+│       │   │       │   ├── EditorScreen.kt         # Editor táctil con cuadrícula interactiva y herramientas de dibujo
+│       │   │       │   ├── GeneratorScreen.kt      # Generador algorítmico, Foto a Patrón con Cámara/AI, Calibrador PDF y Lua
 │       │   │       │   ├── GuideCalculatorScreen.kt# Calculadora de muñeca, hilos y técnicas
-│       │   │       │   └── CatalogScreen.kt        # Explorador del catálogo Miyuki Delica 11/0
+│       │   │       │   └── TrackerScreen.kt        # Tejedor paso a paso con fila activa, hápticos y zoom
 │       │   │       ├── theme/              # Sistema de diseño Material 3
 │       │   │       │   ├── Color.kt          # Colores inspirados en cuentas Miyuki (Oro, Turquesa, etc.)
 │       │   │       │   ├── Theme.kt          # ColorScheme claro y oscuro
@@ -110,13 +111,15 @@ Este documento detalla la estructura física del repositorio, la responsabilidad
                          └─────────────────────┘ └─────────────────────────┘
                                         │
                                         ▼
-                         ┌─────────────────────────────────────┐
-                         │       C++20 Color & Chart Core      │
-                         │ • Colorimetría CIELAB (D65)         │
-                         │ • Difusión error Floyd-Steinberg    │
-                         │ • Muestreo Trimmed Mean para PDFs   │
-                         │ • Compensación Peyote / Brick / Loom│
-                         └─────────────────────────────────────┘
+                         ┌──────────────────────────────────────────────┐
+                         │           C++20 Color & AI Core              │
+                         │ • Colorimetría CIELAB (D65)                  │
+                         │ • Difusión de error Floyd-Steinberg          │
+                         │ • AI Local: K-Means (K=3) + Saliency Map     │
+                         │ • Segmentación de fondo y mesa por Flood-Fill│
+                         │ • Muestreo Trimmed Mean para PDFs            │
+                         │ • Compensación Peyote / Brick / Loom         │
+                         └──────────────────────────────────────────────┘
 ```
 
 ---

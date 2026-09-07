@@ -67,7 +67,12 @@ Este documento proporciona a cualquier modelo de lenguaje o asistente de IA todo
    - Mapeo euclidiano en espacio cromático perceptualmente uniforme **CIELAB (D65)** al catálogo de 20 tonos Delica 11/0.
    - Reducción opcional a paleta dominante de $N$ colores para limpiar ruido de escaneo.
 
-6. **Depuración en Dispositivo Móvil (Sin PC / ADB)**:
+6. **AI Local en C++20 para Detección de Fondo y Mesas**:
+   - Algoritmo no supervisado on-device basado en **K-Means Clustering ($K=3$)** en espacio CIELAB para modelar superficies texturizadas (madera, manteles, baldosas) a partir de muestras perimetrales estratificadas.
+   - **Mapa de Salicidad (Center-Prior / Saliency)** con ponderación radial gaussiana que expande la tolerancia en las orillas y protege el centro de la pieza.
+   - **Segmentación Conectada por Flood-Fill**: Aísla la superficie continua exterior e impide la perforación de cuentas con colores similares en el interior del motivo.
+
+7. **Depuración en Dispositivo Móvil (Sin PC / ADB)**:
    - Dado que el usuario opera el proyecto exclusivamente desde un teléfono celular sin ordenador, se integran herramientas de diagnóstico in-app:
    - **Lynx**: Se accede mediante `DebugTools.openLynxLogcat(context)` desde la TopAppBar o la consola de Lua. Muestra el buffer de Logcat del sistema en tiempo real.
    - **LeakCanary 2.14**: Se ejecuta como servicio/actividad independiente en builds de depuración para auditar la memoria RAM ante la manipulación de Bitmaps y PDF grandes.
@@ -76,9 +81,15 @@ Este documento proporciona a cualquier modelo de lenguaje o asistente de IA todo
 
 ## 🧭 Glosario Rápido de Archivos Clave
 
-- `app/src/main/cpp/miyuki_engine.cpp`: Contiene las funciones JNI nativas, inicialización de Lua, dithering Floyd-Steinberg y calibración/muestreo *Trimmed Mean* en C++20.
+- `app/src/main/cpp/miyuki_engine.cpp`: Contiene las funciones JNI nativas, inicialización de Lua, dithering Floyd-Steinberg, AI local (K-Means + Saliency Map) y calibración *Trimmed Mean* en C++20.
 - `app/src/main/rust/miyuki_rust/src/lib.rs`: Contiene las funciones trigonométricas de zarcillos y la auto-detección matemática de cuadrículas (`rust_analyze_chart_grid`).
+- `app/src/main/java/com/example/ui/components/BeadCanvas.kt`: Componente Jetpack Compose que dibuja la cuadrícula táctil y representa visualmente cuentas cilíndricas según la técnica (Telar, Peyote y Brick Stitch).
+- `app/src/main/java/com/example/ui/screens/EditorScreen.kt`: Editor táctil interactivo con cuadrícula y paleta de herramientas de dibujo.
+- `app/src/main/java/com/example/ui/screens/TrackerScreen.kt`: Tejedor interactivo paso a paso con fila activa, lupa visual y hápticos.
+- `app/src/main/java/com/example/ui/screens/GeneratorScreen.kt`: Estudio creativo con captura directa de cámara, galería, AI local de eliminación de fondos/mesas, calibrador PDF y consola Lua.
+- `app/src/main/java/com/example/ui/screens/CatalogScreen.kt`: Catálogo de cuentas oficiales Delica 11/0.
+- `app/src/main/java/com/example/ui/screens/GuideCalculatorScreen.kt`: Calculadora de muñeca, hilos y consumo de material.
 - `app/src/main/java/com/example/util/PdfPatternExtractor.kt`: Renderizado nativo de páginas PDF con `PdfRenderer` y utilidades de decodificación/recorte de bitmaps.
 - `app/src/main/java/com/example/util/DebugTools.kt`: Lanzador y configuración del visor de Logcat interactivo (Lynx) en pantalla.
 - `app/src/main/java/com/example/nativebridge/MiyukiNativeBridge.kt`: Interfaz Kotlin con `System.loadLibrary("miyuki_native")`.
-- `app/src/main/java/com/example/ui/viewmodel/PatternViewModel.kt`: Estado reactivo principal de la aplicación, coordinación de importación de PDF/fotos y parámetros de calibración.
+- `app/src/main/java/com/example/ui/viewmodel/PatternViewModel.kt`: Estado reactivo principal de la aplicación, coordinación de importación de PDF/fotos, cámara y parámetros de calibración.

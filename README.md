@@ -21,8 +21,12 @@ La aplicación está optimizada para su uso directo en teléfonos inteligentes y
 - **Orientación reversible**: Modos de tejido de abajo hacia arriba (*Bottom-Up*) o de arriba hacia abajo (*Top-Down*).
 - **Indicador de progreso y tiempo**: Contador de cuentas tejidas, porcentaje completado y tiempo transcurrido en la sesión.
 
-### 3. Foto a Patrón con Cuantización CIELAB en C++20
-- **Importación de fotos sin permisos invasivos**: Selección de imágenes desde la galería mediante Android Photo Picker.
+### 3. Foto a Patrón con Cámara Directa y AI Local (K-Means + Saliency en C++20)
+- **Captura directa con cámara en el móvil**: Dispara una foto instantánea a cualquier accesorio, pulsera o muestra física con el botón táctil de cámara o elígela de la galería con Android Photo Picker.
+- **AI Local para Quitar Mesa y Fondo**:
+  - Modelo de visión on-device en C++20 con **K-Means Clustering ($K=3$)** que agrupa y aprende los colores de la superficie de apoyo (madera con vetas, manteles, encimeras o sombras).
+  - **Saliency Map (Center-Prior)**: Ponderación espacial gaussiana que amplía la tolerancia cromática hacia los bordes y protege el motivo central.
+  - **Flood-Fill Conectado**: Elimina la superficie exterior continua sin perforar los colores idénticos presentes en las cuentas del centro del tejido.
 - **Cuantización de color nativa**: Algoritmo en C++20 para remuestreo bilineal, ajuste dinámico de brillo y contraste, y reducción de paleta a las referencias más frecuentes de Miyuki Delica.
 - **Dithering Floyd-Steinberg**: Difusión de error de cuantización en espacio tridimensional RGB para conservar texturas y gradientes suaves en cuadrículas pequeñas.
 - **Mapeo cromático de alta fidelidad**: Conversión de sRGB a espacio perceptualmente uniforme **CIELAB (D65)** para asociar cada píxel al código Delica 11/0 más idéntico a la vista humana.

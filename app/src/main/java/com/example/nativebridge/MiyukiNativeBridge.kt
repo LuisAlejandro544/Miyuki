@@ -31,7 +31,9 @@ object MiyukiNativeBridge {
         brightness: Float,
         contrast: Float,
         useDithering: Boolean,
-        maxColors: Int
+        maxColors: Int,
+        backgroundMode: Int = 1,
+        bgTolerance: Float = 24.0f
     ): IntArray
 
     external fun analyzeChartGridRustNative(
