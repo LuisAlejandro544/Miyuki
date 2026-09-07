@@ -28,8 +28,10 @@ import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
@@ -82,7 +84,8 @@ fun EditorScreen(
     onRedo: () -> Unit,
     onClearCanvas: () -> Unit,
     onSavePattern: (String) -> Unit,
-    onStartTracking: (BeadPattern) -> Unit
+    onStartTracking: (BeadPattern) -> Unit,
+    onExportPdf: (BeadPattern) -> Unit
 ) {
     var showSaveDialog by remember { mutableStateOf(false) }
     var showMaterialsDialog by remember { mutableStateOf(false) }
@@ -126,6 +129,12 @@ fun EditorScreen(
                     }
                     IconButton(onClick = onRedo, modifier = Modifier.testTag("redo_btn")) {
                         Icon(Icons.Default.Redo, contentDescription = "Rehacer")
+                    }
+                    IconButton(
+                        onClick = { onExportPdf(pattern) },
+                        modifier = Modifier.testTag("editor_export_pdf_btn")
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = "Exportar PDF", tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(
                         onClick = { showSaveDialog = true },
@@ -406,7 +415,23 @@ fun EditorScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = { showMaterialsDialog = false }) {
+                Button(
+                    onClick = {
+                        onExportPdf(pattern)
+                        showMaterialsDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MiyukiGold,
+                        contentColor = Color(0xFF1B191B)
+                    )
+                ) {
+                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Exportar PDF", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMaterialsDialog = false }) {
                     Text("Cerrar")
                 }
             }

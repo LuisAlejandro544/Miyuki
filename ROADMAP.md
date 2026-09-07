@@ -54,6 +54,18 @@ Este documento describe la planificación de versiones, objetivos técnicos y ev
   - [ ] Generación de documentos PDF vectoriales con la cuadrícula numerada lista para imprimir.
   - [ ] Tabla de consumo de materiales desglosada por código de delica, color y cantidad exacta de piezas.
   - [ ] Instrucciones escritas de ensartado paso a paso por fila (*Word Chart*).
+- [ ] **Evolución Profesional del Conversor "Foto a Patrón" (Fidelidad para Pulseras Reales)**:
+  - [ ] **Herramienta de Recorte Táctil Nativa (UCrop / CanCropper)**: Recorte de alta precisión para pantalla táctil con soporte de gestos con dos dedos (rotación, zoom y relaciones de aspecto 1:1, 1:8) para enmarcar motivos específicos antes de procesar.
+  - [ ] **Integración de OpenCV para Android (NDK / C++)**:
+    - [ ] Algoritmos de segmentación **GrabCut / Watershed** para aislar el objeto o pulsera del fondo de la mesa o superficie de apoyo.
+    - [ ] **Bilateral Filtering**: Supresión de reflejos de luz y brillos de plástico/silicona/hilo conservando bordes afilados tipo Pixel Art.
+    - [ ] **Corrección de Perspectiva y Homografía**: Enderezado de tomas diagonales o inclinadas a planos frontales ortogonales.
+  - [ ] **Google ML Kit (Subject Segmentation)**: Detección y recorte automático del sujeto/objeto en el dispositivo móvil sin conexión a internet.
+  - [ ] **Motor de Cuantización K-Means en C++20 / Rust con Espacio CIELAB**:
+    - [ ] Agrupación de gradientes de color en N tonos puros fijados por el usuario (ej. 2-4 colores).
+    - [ ] Reducción de variaciones tonales por sombra y mapeo directo a referencias oficiales Miyuki Delica 11/0.
+  - [ ] **Motor de "Desenrollado" Paramétrico (Unrolling)**: Detección de aros curvos o pulseras cerradas en perspectiva para proyectarlas matemáticamente a tiras rectas horizontales de telar o peyote.
+  - [ ] **Modo "Motivo Central a Pulsera Recta"**: Extracción de logotipos o motivos centrales (ej. cara de Creeper 8×8) con generación automática de la tira recta de pulsera (ancho en columnas y largo en cm personalizables) con el icono centrado.
 - [ ] **Exportación e Importación de Respaldo**:
   - [ ] Exportación de patrones a archivo comprimido `.bead` (JSON + miniatura PNG).
   - [ ] Compartir directamente a través de WhatsApp, Telegram o correo electrónico desde el teléfono.

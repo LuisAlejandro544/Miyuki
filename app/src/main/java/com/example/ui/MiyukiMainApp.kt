@@ -236,7 +236,8 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
                         onCreateNewPattern = { title, tech, cols, rows ->
                             viewModel.createNewPattern(title, tech, cols, rows)
                         },
-                        onNavigateToGenerator = { viewModel.setTab(AppTab.GENERATOR) }
+                        onNavigateToGenerator = { viewModel.setTab(AppTab.GENERATOR) },
+                        onExportPdf = { viewModel.exportPatternToPdf(context, it) }
                     )
                 }
 
@@ -331,7 +332,8 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
                         onRedo = { viewModel.redo() },
                         onClearCanvas = { viewModel.clearEditorCanvas() },
                         onSavePattern = { viewModel.saveEditorPattern(it) },
-                        onStartTracking = { viewModel.startTrackingPattern(it) }
+                        onStartTracking = { viewModel.startTrackingPattern(it) },
+                        onExportPdf = { viewModel.exportPatternToPdf(context, it) }
                     )
                 }
 
@@ -342,7 +344,8 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
                         onNextRow = { viewModel.nextRow() },
                         onPreviousRow = { viewModel.previousRow() },
                         onSetRow = { viewModel.setRow(it) },
-                        onReset = { viewModel.resetTracker() }
+                        onReset = { viewModel.resetTracker() },
+                        onExportPdf = { viewModel.exportPatternToPdf(context, it) }
                     )
                 }
 

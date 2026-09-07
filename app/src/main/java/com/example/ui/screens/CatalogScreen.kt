@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -83,7 +84,8 @@ fun CatalogScreen(
     onToggleFavorite: (BeadPattern) -> Unit,
     onDeletePattern: (BeadPattern) -> Unit,
     onCreateNewPattern: (title: String, technique: BeadTechnique, columns: Int, rows: Int) -> Unit,
-    onNavigateToGenerator: () -> Unit
+    onNavigateToGenerator: () -> Unit,
+    onExportPdf: (BeadPattern) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedTechniqueFilter by remember { mutableStateOf<BeadTechnique?>(null) }
@@ -236,6 +238,7 @@ fun CatalogScreen(
                         onEdit = { onPatternSelectedForEditing(pattern) },
                         onToggleFav = { onToggleFavorite(pattern) },
                         onShowMaterials = { patternForMaterials = pattern },
+                        onExportPdf = { onExportPdf(pattern) },
                         onDelete = { onDeletePattern(pattern) }
                     )
                 }
@@ -267,6 +270,7 @@ fun CatalogScreen(
     patternForMaterials?.let { pattern ->
         MaterialsDialog(
             pattern = pattern,
+            onExportPdf = { onExportPdf(pattern) },
             onDismiss = { patternForMaterials = null }
         )
     }
@@ -384,6 +388,7 @@ private fun PatternCardItem(
     onEdit: () -> Unit,
     onToggleFav: () -> Unit,
     onShowMaterials: () -> Unit,
+    onExportPdf: () -> Unit,
     onDelete: () -> Unit
 ) {
     ElevatedCard(
@@ -399,7 +404,7 @@ private fun PatternCardItem(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // Header Row: Title & Favorite Button
+            // Header Row: Title & Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -422,6 +427,17 @@ private fun PatternCardItem(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onExportPdf,
+                        modifier = Modifier.testTag("export_pdf_btn_${pattern.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Exportar PDF",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     IconButton(
                         onClick = onToggleFav,
                         modifier = Modifier.testTag("fav_btn_${pattern.id}")
@@ -623,6 +639,7 @@ private fun EmptyCatalogState(
 @Composable
 private fun MaterialsDialog(
     pattern: BeadPattern,
+    onExportPdf: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val beadCounts = remember(pattern) { pattern.calculateBeadCounts() }
@@ -720,8 +737,24 @@ private fun MaterialsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("Entendido")
+            Button(
+                onClick = {
+                    onExportPdf()
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MiyukiGold,
+                    contentColor = Color(0xFF1B191B)
+                )
+            ) {
+                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Exportar PDF", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
             }
         }
     )

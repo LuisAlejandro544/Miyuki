@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -15,12 +16,15 @@ import com.example.data.repository.PresetPatterns
 import com.example.generator.GeneratorStyle
 import com.example.generator.PatternGenerator
 import com.example.nativebridge.MiyukiNativeBridge
+import com.example.util.PdfPatternExporter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class AppTab(val label: String) {
     CATALOG("Patrones"),
@@ -911,6 +915,26 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
             MiyukiNativeBridge.getNativeEngineStatus()
         } else {
             "Error al cargar motor nativo: ${MiyukiNativeBridge.getLoadError()}"
+        }
+    }
+
+    /**
+     * Exports the pattern to a multi-page PDF document (Technical sheet, Material list,
+     * Scaled Color Grid, and written Word Chart) and opens Android's share chooser.
+     */
+    fun exportPatternToPdf(context: Context, pattern: BeadPattern) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = PdfPatternExporter.exportPatternToPdf(context, pattern)
+                withContext(Dispatchers.Main) {
+                    _snackbarMessage.value = "Ficha PDF generada: ${file.name}"
+                    PdfPatternExporter.sharePdf(context, file)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _snackbarMessage.value = "Error al exportar PDF: ${e.localizedMessage}"
+                }
+            }
         }
     }
 }

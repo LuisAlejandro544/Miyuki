@@ -102,4 +102,24 @@ class MiyukiPatternGeneratorTest {
             assertNotNull(err)
         }
     }
+
+    @Test
+    fun testWordChartExtractionForPdf() {
+        val pattern = PatternGenerator.generate(
+            title = "Test PDF Word Chart",
+            style = GeneratorStyle.CHEVRON,
+            technique = BeadTechnique.LOOM,
+            columns = 10,
+            rows = 20,
+            palette = CuratedPalettes.ORO_Y_NOCHE,
+            symmetry = true
+        )
+
+        val uniqueColors = pattern.grid.filter { it != 0 && it != -1 }.distinct()
+        assertTrue(uniqueColors.isNotEmpty())
+        for (r in 0 until pattern.rows) {
+            val rowBeads = pattern.getRowBeads(r)
+            assertEquals(10, rowBeads.size)
+        }
+    }
 }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -75,7 +76,8 @@ fun TrackerScreen(
     onNextRow: () -> Unit,
     onPreviousRow: () -> Unit,
     onSetRow: (Int) -> Unit,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    onExportPdf: (BeadPattern) -> Unit = {}
 ) {
     val totalRows = pattern.rows
     val progressFraction = ((currentRow + 1).toFloat() / totalRows).coerceIn(0f, 1f)
@@ -138,8 +140,17 @@ fun TrackerScreen(
                 )
             }
 
-            IconButton(onClick = onReset) {
-                Icon(Icons.Default.RestartAlt, contentDescription = "Reiniciar al inicio")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { onExportPdf(pattern) }) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = "Exportar PDF",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onReset) {
+                    Icon(Icons.Default.RestartAlt, contentDescription = "Reiniciar al inicio")
+                }
             }
         }
 
