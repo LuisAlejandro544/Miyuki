@@ -52,6 +52,14 @@ jobs:
           rustc --version
           cargo --version
 
+          echo "==> Compilando librerías estáticas de Rust (aarch64 y x86_64)..."
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
+          cargo build --manifest-path app/src/main/rust/miyuki_rust/Cargo.toml --target aarch64-linux-android --release
+          cargo build --manifest-path app/src/main/rust/miyuki_rust/Cargo.toml --target x86_64-linux-android --release
+          ls -la app/src/main/rust/miyuki_rust/target/aarch64-linux-android/release/libmiyuki_rust.a
+          ls -la app/src/main/rust/miyuki_rust/target/x86_64-linux-android/release/libmiyuki_rust.a
+
       # 6. Verificación de dependencias de C++, Lua y Rust presentes en el árbol
       - name: Verificar dependencias C++, Lua y Rust
         run: |
@@ -79,6 +87,8 @@ jobs:
       - name: Compilar APK Debug
         run: |
           source "$HOME/.cargo/env" || true
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
           gradle assembleDebug \
             --no-build-cache \
             --no-configuration-cache \
