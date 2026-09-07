@@ -82,3 +82,105 @@ pub extern "C" fn rust_calculate_triangle_decrease_rows(base_width: i32) -> i32 
     }
     base_width
 }
+
+// Analyzes horizontal and vertical gradient projections of a cropped bead pattern chart
+// to estimate the number of columns and rows.
+#[no_mangle]
+pub extern "C" fn rust_analyze_chart_grid(
+    pixels: *const u32,
+    width: i32,
+    height: i32,
+    out_cols: *mut i32,
+    out_rows: *mut i32,
+) -> i32 {
+    if pixels.is_null() || width < 20 || height < 20 || out_cols.is_null() || out_rows.is_null() {
+        return 0;
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+
+    let lum = |px: u32| -> f32 {
+        let r = ((px >> 16) & 0xFF) as f32;
+        let g = ((px >> 8) & 0xFF) as f32;
+        let b = (px & 0xFF) as f32;
+        0.299 * r + 0.587 * g + 0.114 * b
+    };
+
+    // Calculate vertical gradients summed per column: indicates column separator lines
+    let mut col_grad = vec![0.0f32; w];
+    for y in 0..h {
+        let row_start = y * w;
+        for x in 1..w {
+            unsafe {
+                let p1 = *pixels.add(row_start + x);
+                let p0 = *pixels.add(row_start + x - 1);
+                let diff = (lum(p1) - lum(p0)).abs();
+                col_grad[x] += diff;
+            }
+        }
+    }
+
+    // Calculate horizontal gradients summed per row: indicates row separator lines
+    let mut row_grad = vec![0.0f32; h];
+    for y in 1..h {
+        let row_curr = y * w;
+        let row_prev = (y - 1) * w;
+        for x in 0..w {
+            unsafe {
+                let p1 = *pixels.add(row_curr + x);
+                let p0 = *pixels.add(row_prev + x);
+                let diff = (lum(p1) - lum(p0)).abs();
+                row_grad[y] += diff;
+            }
+        }
+    }
+
+    // Estimate column count in expected range (8 to 70)
+    let mut best_cols = 20;
+    let mut best_col_score = -1.0f32;
+    for test_cols in 8..=70 {
+        let step = (w as f32) / (test_cols as f32);
+        if step < 3.0 { break; }
+        let mut score = 0.0f32;
+        for c in 1..test_cols {
+            let x = (c as f32 * step).round() as usize;
+            if x < w {
+                score += col_grad[x];
+            }
+        }
+        score /= (test_cols - 1) as f32;
+        if score > best_col_score {
+            best_col_score = score;
+            best_cols = test_cols;
+        }
+    }
+
+    // Estimate row count in expected range (12 to 120)
+    let mut best_rows = 40;
+    let mut best_row_score = -1.0f32;
+    for test_rows in 12..=120 {
+        let step = (h as f32) / (test_rows as f32);
+        if step < 3.0 { break; }
+        let mut score = 0.0f32;
+        for r in 1..test_rows {
+            let y = (r as f32 * step).round() as usize;
+            if y < h {
+                score += row_grad[y];
+            }
+        }
+        score /= (test_rows - 1) as f32;
+        if score > best_row_score {
+            best_row_score = score;
+            best_rows = test_rows;
+        }
+    }
+
+    unsafe {
+        *out_cols = best_cols;
+        *out_rows = best_rows;
+    }
+
+    1
+}
+

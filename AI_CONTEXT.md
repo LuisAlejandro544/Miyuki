@@ -60,12 +60,25 @@ Este documento proporciona a cualquier modelo de lenguaje o asistente de IA todo
    - El estado siempre se cierra con `lua_close(L)` para evitar fugas de memoria en el runtime nativo de Android.
 4. **Rust FFI Safety**:
    - Todas las funciones de Rust expuestas al JNI deben usar `#[no_mangle] pub extern "C"` y firmas compatibles con C-ABI (`int32_t`, punteros planos con longitud verificada).
+   - Incluye análisis de gradientes de Sobel y autocorrelación (`rust_analyze_chart_grid`) para detección automática de cuadrículas en PDFs y fotos.
+5. **Calibración de Gráficos y PDF en C++20**:
+   - Muestreo centrado en el interior de cada cuenta (`sampleWindowRatio` del 25% al 80%) para evitar capturar las líneas impresas negras de las cartas de patrones.
+   - Algoritmo *Trimmed Mean* que descarta el 15% superior e inferior de luminosidad de la muestra antes de calcular el promedio RGB.
+   - Mapeo euclidiano en espacio cromático perceptualmente uniforme **CIELAB (D65)** al catálogo de 20 tonos Delica 11/0.
+   - Reducción opcional a paleta dominante de $N$ colores para limpiar ruido de escaneo.
+
+6. **Depuración en Dispositivo Móvil (Sin PC / ADB)**:
+   - Dado que el usuario opera el proyecto exclusivamente desde un teléfono celular sin ordenador, se integran herramientas de diagnóstico in-app:
+   - **Lynx**: Se accede mediante `DebugTools.openLynxLogcat(context)` desde la TopAppBar o la consola de Lua. Muestra el buffer de Logcat del sistema en tiempo real.
+   - **LeakCanary 2.14**: Se ejecuta como servicio/actividad independiente en builds de depuración para auditar la memoria RAM ante la manipulación de Bitmaps y PDF grandes.
 
 ---
 
 ## 🧭 Glosario Rápido de Archivos Clave
 
-- `app/src/main/cpp/miyuki_engine.cpp`: Contiene las funciones JNI nativas y la inicialización de Lua.
-- `app/src/main/rust/miyuki_rust/src/lib.rs`: Contiene las funciones trigonométricas de zarcillos (`rust_calculate_fringe_length` y `rust_generate_earring_geometry`).
+- `app/src/main/cpp/miyuki_engine.cpp`: Contiene las funciones JNI nativas, inicialización de Lua, dithering Floyd-Steinberg y calibración/muestreo *Trimmed Mean* en C++20.
+- `app/src/main/rust/miyuki_rust/src/lib.rs`: Contiene las funciones trigonométricas de zarcillos y la auto-detección matemática de cuadrículas (`rust_analyze_chart_grid`).
+- `app/src/main/java/com/example/util/PdfPatternExtractor.kt`: Renderizado nativo de páginas PDF con `PdfRenderer` y utilidades de decodificación/recorte de bitmaps.
+- `app/src/main/java/com/example/util/DebugTools.kt`: Lanzador y configuración del visor de Logcat interactivo (Lynx) en pantalla.
 - `app/src/main/java/com/example/nativebridge/MiyukiNativeBridge.kt`: Interfaz Kotlin con `System.loadLibrary("miyuki_native")`.
-- `app/src/main/java/com/example/ui/viewmodel/PatternViewModel.kt`: Estado reactivo principal de la aplicación.
+- `app/src/main/java/com/example/ui/viewmodel/PatternViewModel.kt`: Estado reactivo principal de la aplicación, coordinación de importación de PDF/fotos y parámetros de calibración.

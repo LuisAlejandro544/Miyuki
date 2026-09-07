@@ -562,6 +562,350 @@ print(string.format("Script Lua C 5.4 ejecutado para %dx%d cuentas.", COLUMNS, R
         _luaConsoleOutput.value = out
     }
 
+    // -------------------------------------------------------------
+    // PHOTO TO PATTERN ENGINE (NATIVE C++20 CIELAB & FLOYD-STEINBERG)
+    // -------------------------------------------------------------
+    private val _photoTargetCols = MutableStateFlow(24)
+    val photoTargetCols: StateFlow<Int> = _photoTargetCols.asStateFlow()
+
+    private val _photoTargetRows = MutableStateFlow(48)
+    val photoTargetRows: StateFlow<Int> = _photoTargetRows.asStateFlow()
+
+    private val _photoBrightness = MutableStateFlow(0f)
+    val photoBrightness: StateFlow<Float> = _photoBrightness.asStateFlow()
+
+    private val _photoContrast = MutableStateFlow(1.15f)
+    val photoContrast: StateFlow<Float> = _photoContrast.asStateFlow()
+
+    private val _photoDithering = MutableStateFlow(true)
+    val photoDithering: StateFlow<Boolean> = _photoDithering.asStateFlow()
+
+    private val _photoMaxColors = MutableStateFlow(12)
+    val photoMaxColors: StateFlow<Int> = _photoMaxColors.asStateFlow()
+
+    private val _isPhotoProcessing = MutableStateFlow(false)
+    val isPhotoProcessing: StateFlow<Boolean> = _isPhotoProcessing.asStateFlow()
+
+    fun updatePhotoParams(
+        cols: Int? = null,
+        rows: Int? = null,
+        brightness: Float? = null,
+        contrast: Float? = null,
+        dithering: Boolean? = null,
+        maxColors: Int? = null
+    ) {
+        if (cols != null) _photoTargetCols.value = cols
+        if (rows != null) _photoTargetRows.value = rows
+        if (brightness != null) _photoBrightness.value = brightness
+        if (contrast != null) _photoContrast.value = contrast
+        if (dithering != null) _photoDithering.value = dithering
+        if (maxColors != null) _photoMaxColors.value = maxColors
+    }
+
+    fun convertBitmapToPattern(bitmap: android.graphics.Bitmap, patternTitle: String = "Foto a Patrón Miyuki") {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            _isPhotoProcessing.value = true
+            try {
+                val srcWidth = bitmap.width
+                val srcHeight = bitmap.height
+                val totalPixels = srcWidth * srcHeight
+                val pixels = IntArray(totalPixels)
+                bitmap.getPixels(pixels, 0, srcWidth, 0, 0, srcWidth, srcHeight)
+
+                val cols = _photoTargetCols.value
+                val rows = _photoTargetRows.value
+                val brightness = _photoBrightness.value
+                val contrast = _photoContrast.value
+                val dithering = _photoDithering.value
+                val maxColors = _photoMaxColors.value
+
+                val quantizedGrid = MiyukiNativeBridge.convertPhotoToPatternNative(
+                    srcPixels = pixels,
+                    srcWidth = srcWidth,
+                    srcHeight = srcHeight,
+                    targetCols = cols,
+                    targetRows = rows,
+                    brightness = brightness,
+                    contrast = contrast,
+                    useDithering = dithering,
+                    maxColors = maxColors
+                )
+
+                if (quantizedGrid.isNotEmpty()) {
+                    val pattern = BeadPattern(
+                        id = System.currentTimeMillis(),
+                        title = patternTitle.ifBlank { "Patrón desde Foto ($cols x $rows)" },
+                        description = "Patrón convertido desde imagen con colorimetría nativa CIELAB y tramado Floyd-Steinberg.",
+                        technique = BeadTechnique.PEYOTE,
+                        columns = cols,
+                        rows = rows,
+                        grid = quantizedGrid.toList(),
+                        category = "Foto a Patrón"
+                    )
+                    _generatedPattern.value = pattern
+                    _snackbarMessage.value = "¡Foto convertida a cuentas Miyuki con éxito!"
+                } else {
+                    _snackbarMessage.value = "Error al procesar la imagen con el motor nativo."
+                }
+            } catch (e: Exception) {
+                _snackbarMessage.value = "Error: ${e.localizedMessage}"
+            } finally {
+                _isPhotoProcessing.value = false
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // PDF & PATTERN CHART CALIBRATION ENGINE (NATIVE C++20 & RUST)
+    // -------------------------------------------------------------
+    private val _pdfSourceBitmap = MutableStateFlow<android.graphics.Bitmap?>(null)
+    val pdfSourceBitmap: StateFlow<android.graphics.Bitmap?> = _pdfSourceBitmap.asStateFlow()
+
+    private val _pdfPageCount = MutableStateFlow(1)
+    val pdfPageCount: StateFlow<Int> = _pdfPageCount.asStateFlow()
+
+    private val _pdfCurrentPage = MutableStateFlow(0)
+    val pdfCurrentPage: StateFlow<Int> = _pdfCurrentPage.asStateFlow()
+
+    private val _cropLeft = MutableStateFlow(0.11f)
+    val cropLeft: StateFlow<Float> = _cropLeft.asStateFlow()
+
+    private val _cropTop = MutableStateFlow(0.16f)
+    val cropTop: StateFlow<Float> = _cropTop.asStateFlow()
+
+    private val _cropRight = MutableStateFlow(0.89f)
+    val cropRight: StateFlow<Float> = _cropRight.asStateFlow()
+
+    private val _cropBottom = MutableStateFlow(0.93f)
+    val cropBottom: StateFlow<Float> = _cropBottom.asStateFlow()
+
+    private val _calibratedCols = MutableStateFlow(16)
+    val calibratedCols: StateFlow<Int> = _calibratedCols.asStateFlow()
+
+    private val _calibratedRows = MutableStateFlow(40)
+    val calibratedRows: StateFlow<Int> = _calibratedRows.asStateFlow()
+
+    private val _calibratedTechnique = MutableStateFlow(BeadTechnique.PEYOTE)
+    val calibratedTechnique: StateFlow<BeadTechnique> = _calibratedTechnique.asStateFlow()
+
+    private val _calibratedSampleWindow = MutableStateFlow(0.50f)
+    val calibratedSampleWindow: StateFlow<Float> = _calibratedSampleWindow.asStateFlow()
+
+    private val _calibratedBrightness = MutableStateFlow(0f)
+    val calibratedBrightness: StateFlow<Float> = _calibratedBrightness.asStateFlow()
+
+    private val _calibratedContrast = MutableStateFlow(1.15f)
+    val calibratedContrast: StateFlow<Float> = _calibratedContrast.asStateFlow()
+
+    private val _calibratedMaxColors = MutableStateFlow(8)
+    val calibratedMaxColors: StateFlow<Int> = _calibratedMaxColors.asStateFlow()
+
+    private val _isCalibrating = MutableStateFlow(false)
+    val isCalibrating: StateFlow<Boolean> = _isCalibrating.asStateFlow()
+
+    private val _isAutoDetectingGrid = MutableStateFlow(false)
+    val isAutoDetectingGrid: StateFlow<Boolean> = _isAutoDetectingGrid.asStateFlow()
+
+    private val _chartDocumentName = MutableStateFlow("Documento de Patrón")
+    val chartDocumentName: StateFlow<String> = _chartDocumentName.asStateFlow()
+
+    fun updateCalibrationCrop(left: Float? = null, top: Float? = null, right: Float? = null, bottom: Float? = null) {
+        if (left != null) _cropLeft.value = left.coerceIn(0.0f, (_cropRight.value - 0.05f).coerceAtLeast(0.01f))
+        if (top != null) _cropTop.value = top.coerceIn(0.0f, (_cropBottom.value - 0.05f).coerceAtLeast(0.01f))
+        if (right != null) _cropRight.value = right.coerceIn((_cropLeft.value + 0.05f).coerceAtMost(0.99f), 1.0f)
+        if (bottom != null) _cropBottom.value = bottom.coerceIn((_cropTop.value + 0.05f).coerceAtMost(0.99f), 1.0f)
+    }
+
+    fun updateCalibrationSettings(
+        cols: Int? = null,
+        rows: Int? = null,
+        technique: BeadTechnique? = null,
+        sampleWindow: Float? = null,
+        brightness: Float? = null,
+        contrast: Float? = null,
+        maxColors: Int? = null
+    ) {
+        if (cols != null) _calibratedCols.value = cols.coerceIn(4, 80)
+        if (rows != null) _calibratedRows.value = rows.coerceIn(6, 150)
+        if (technique != null) _calibratedTechnique.value = technique
+        if (sampleWindow != null) _calibratedSampleWindow.value = sampleWindow.coerceIn(0.2f, 0.85f)
+        if (brightness != null) _calibratedBrightness.value = brightness.coerceIn(-60f, 60f)
+        if (contrast != null) _calibratedContrast.value = contrast.coerceIn(0.5f, 2.5f)
+        if (maxColors != null) _calibratedMaxColors.value = maxColors.coerceIn(2, 30)
+    }
+
+    fun loadSamplePdfChart() {
+        val sample = com.example.util.PdfPatternExtractor.createSampleChartDocument()
+        _pdfSourceBitmap.value = sample
+        _pdfPageCount.value = 1
+        _pdfCurrentPage.value = 0
+        _chartDocumentName.value = "Muestra PDF: Pulsera Étnica Sol (16x40)"
+        _cropLeft.value = 0.11f
+        _cropTop.value = 0.16f
+        _cropRight.value = 0.89f
+        _cropBottom.value = 0.93f
+        _calibratedCols.value = 16
+        _calibratedRows.value = 40
+        _calibratedTechnique.value = BeadTechnique.PEYOTE
+        _snackbarMessage.value = "Plantilla PDF cargada. ¡Puedes calibrarla o probar auto-detección!"
+    }
+
+    private var _lastPdfUri: android.net.Uri? = null
+
+    fun loadPdfOrImageUri(context: android.content.Context, uri: android.net.Uri) {
+        _lastPdfUri = uri
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                if (com.example.util.PdfPatternExtractor.isPdf(context, uri)) {
+                    val count = com.example.util.PdfPatternExtractor.getPdfPageCount(context, uri)
+                    _pdfPageCount.value = count
+                    _pdfCurrentPage.value = 0
+                    val bmp = com.example.util.PdfPatternExtractor.renderPdfPage(context, uri, 0)
+                    if (bmp != null) {
+                        _pdfSourceBitmap.value = bmp
+                        _chartDocumentName.value = "PDF (${bmp.width}x${bmp.height} - Pág 1 de $count)"
+                        _snackbarMessage.value = "PDF rasterizado con éxito. Ajusta el recuadro a la cuadrícula."
+                    } else {
+                        _snackbarMessage.value = "No se pudo renderizar la página del PDF."
+                    }
+                } else {
+                    val bmp = com.example.util.PdfPatternExtractor.decodeImageUri(context, uri)
+                    if (bmp != null) {
+                        _pdfSourceBitmap.value = bmp
+                        _pdfPageCount.value = 1
+                        _pdfCurrentPage.value = 0
+                        _chartDocumentName.value = "Imagen Gráfico (${bmp.width}x${bmp.height})"
+                        _snackbarMessage.value = "Gráfico cargado. Ajusta el recuadro a la cuadrícula."
+                    } else {
+                        _snackbarMessage.value = "Error al abrir la imagen del patrón."
+                    }
+                }
+            } catch (e: Exception) {
+                _snackbarMessage.value = "Error al abrir archivo: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun changePdfPage(context: android.content.Context, newPage: Int) {
+        val uri = _lastPdfUri ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val bmp = com.example.util.PdfPatternExtractor.renderPdfPage(context, uri, newPage)
+            if (bmp != null) {
+                _pdfSourceBitmap.value = bmp
+                _pdfCurrentPage.value = newPage
+                _chartDocumentName.value = "PDF - Pág ${newPage + 1} de ${_pdfPageCount.value}"
+            }
+        }
+    }
+
+    fun autoDetectGridWithRust() {
+        val src = _pdfSourceBitmap.value ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            _isAutoDetectingGrid.value = true
+            try {
+                val cropped = com.example.util.PdfPatternExtractor.cropBitmap(
+                    src,
+                    _cropLeft.value,
+                    _cropTop.value,
+                    _cropRight.value,
+                    _cropBottom.value
+                )
+                val w = cropped.width
+                val h = cropped.height
+                val total = w * h
+                val pixels = IntArray(total)
+                cropped.getPixels(pixels, 0, w, 0, 0, w, h)
+
+                val detected = MiyukiNativeBridge.analyzeChartGridRustNative(pixels, w, h)
+                if (detected.size >= 2 && detected[0] > 0 && detected[1] > 0) {
+                    _calibratedCols.value = detected[0].coerceIn(6, 70)
+                    _calibratedRows.value = detected[1].coerceIn(10, 120)
+                    _snackbarMessage.value = "Rust detectó: ${detected[0]} columnas y ${detected[1]} filas"
+                } else {
+                    _snackbarMessage.value = "No se detectaron líneas claras. Ajusta manualmente."
+                }
+            } catch (e: Exception) {
+                _snackbarMessage.value = "Error en auto-detección: ${e.localizedMessage}"
+            } finally {
+                _isAutoDetectingGrid.value = false
+            }
+        }
+    }
+
+    fun calibrateAndExtractPattern(title: String = "Patrón Calibrado desde PDF") {
+        val src = _pdfSourceBitmap.value
+        if (src == null) {
+            _snackbarMessage.value = "Por favor carga un PDF o gráfico primero."
+            return
+        }
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            _isCalibrating.value = true
+            try {
+                val cropped = com.example.util.PdfPatternExtractor.cropBitmap(
+                    src,
+                    _cropLeft.value,
+                    _cropTop.value,
+                    _cropRight.value,
+                    _cropBottom.value
+                )
+                val w = cropped.width
+                val h = cropped.height
+                val total = w * h
+                val pixels = IntArray(total)
+                cropped.getPixels(pixels, 0, w, 0, 0, w, h)
+
+                val cols = _calibratedCols.value
+                val rows = _calibratedRows.value
+                val tech = _calibratedTechnique.value
+                val techCode = when (tech) {
+                    BeadTechnique.PEYOTE -> 1
+                    BeadTechnique.BRICK_STITCH -> 2
+                    BeadTechnique.LOOM -> 0
+                }
+
+                val sampleRatio = _calibratedSampleWindow.value
+                val brightness = _calibratedBrightness.value
+                val contrast = _calibratedContrast.value
+                val maxColors = _calibratedMaxColors.value
+
+                val resultGrid = MiyukiNativeBridge.calibrateAndSamplePatternNative(
+                    srcPixels = pixels,
+                    srcWidth = w,
+                    srcHeight = h,
+                    targetCols = cols,
+                    targetRows = rows,
+                    technique = techCode,
+                    sampleWindowRatio = sampleRatio,
+                    brightness = brightness,
+                    contrast = contrast,
+                    maxColors = maxColors
+                )
+
+                if (resultGrid.isNotEmpty()) {
+                    val pattern = BeadPattern(
+                        id = System.currentTimeMillis(),
+                        title = title.ifBlank { "Patrón PDF Calibrado ($cols x $rows)" },
+                        description = "Calibrado y muestreado en C++20 CIELAB desde ${_chartDocumentName.value}. Técnica: ${tech.title}.",
+                        technique = tech,
+                        columns = cols,
+                        rows = rows,
+                        grid = resultGrid.toList(),
+                        category = "Importado PDF"
+                    )
+                    _generatedPattern.value = pattern
+                    _snackbarMessage.value = "¡Patrón calibrado con éxito! Listo en el Taller y Modo Tejedor."
+                } else {
+                    _snackbarMessage.value = "Error al calibrar cuadrícula con el motor C++."
+                }
+            } catch (e: Exception) {
+                _snackbarMessage.value = "Error: ${e.localizedMessage}"
+            } finally {
+                _isCalibrating.value = false
+            }
+        }
+    }
+
     fun getNativeEngineDiagnostic(): String {
         return if (MiyukiNativeBridge.isNativeLoaded()) {
             MiyukiNativeBridge.getNativeEngineStatus()

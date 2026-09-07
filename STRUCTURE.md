@@ -23,7 +23,7 @@ Este documento detalla la estructura física del repositorio, la responsabilidad
 │       │   │       ├── Cargo.toml      # Configuración del crate estático de Rust (crate-type = ["staticlib"])
 │       │   │       ├── Cargo.lock
 │       │   │       └── src/
-│       │   │           └── lib.rs      # Lógica matemática de zarcillos, flecos y copas triangulares
+│       │   │           └── lib.rs      # Lógica matemática de zarcillos, flecos y auto-detección de cuadrícula (Rust)
 │       │   ├── java/com/example/       # Código fuente Kotlin (Jetpack Compose, Room, MVVM)
 │       │   │   ├── MainActivity.kt     # Actividad única con Edge-to-Edge habilitado
 │       │   │   ├── data/
@@ -37,15 +37,18 @@ Este documento detalla la estructura física del repositorio, la responsabilidad
 │       │   │   │       └── MiyukiBead.kt         # Catálogo oficial Delica 11/0 y paletas curadas
 │       │   │   ├── generator/          # Generadores de patrones procedurales
 │       │   │   │   └── PatternGenerator.kt   # Algoritmos de chevrons, grecas, rombos y rayas
+│       │   │   ├── util/               # Utilidades de documentos, gráficos y diagnóstico móvil
+│       │   │   │   ├── PdfPatternExtractor.kt# Rasterizador nativo de PDF y decodificador de gráficos
+│       │   │   │   └── DebugTools.kt         # Lanzador y configuración de la consola Logcat Lynx en pantalla
 │       │   │   ├── nativebridge/       # Puente JNI con libmiyuki_native.so
-│       │   │   │   └── MiyukiNativeBridge.kt # Declaraciones de métodos nativos externos
+│       │   │   │   └── MiyukiNativeBridge.kt # Declaraciones de métodos C++, Rust y Lua
 │       │   │   └── ui/                 # Capa de presentación (Jetpack Compose)
 │       │   │       ├── MiyukiMainApp.kt      # Contenedor de navegación y barra inferior
 │       │   │       ├── screens/              # Pantallas de la aplicación
 │       │   │       │   ├── HomeScreen.kt           # Galería de proyectos, creación rápida y métricas
 │       │   │       │   ├── PatternEditorScreen.kt  # Editor táctil con cuadrícula interactiva
 │       │   │       │   ├── PatternTrackerScreen.kt # Tejedor paso a paso con fila activa y hápticos
-│       │   │       │   ├── GeneratorScreen.kt      # Generador algorítmico, Zarcillos Rust y Lua C
+│       │   │       │   ├── GeneratorScreen.kt      # Generador algorítmico, Foto a Patrón, Calibrador PDF y Lua
 │       │   │       │   ├── GuideCalculatorScreen.kt# Calculadora de muñeca, hilos y técnicas
 │       │   │       │   └── CatalogScreen.kt        # Explorador del catálogo Miyuki Delica 11/0
 │       │   │       ├── theme/              # Sistema de diseño Material 3
@@ -99,12 +102,21 @@ Este documento detalla la estructura física del repositorio, la responsabilidad
                                  └──────┬───────────────┬──────┘
                                         │               │
                                         ▼               ▼
-                         ┌─────────────────────┐ ┌─────────────────────┐
-                         │ Lua 5.4 ANSI C Core │ │  Rust Static Engine │
-                         │ • Intérprete oficial│ │  • Trigonometría    │
-                         │ • Captura de prints │ │  • Copas zarcillos  │
-                         │ • getBead(col, row) │ │  • Física de flecos │
-                         └─────────────────────┘ └─────────────────────┘
+                         ┌─────────────────────┐ ┌─────────────────────────┐
+                         │ Lua 5.4 ANSI C Core │ │   Rust Static Engine    │
+                         │ • Intérprete oficial│ │ • Trigonometría zarcillo│
+                         │ • Captura de prints │ │ • Auto-detección matriz │
+                         │ • getBead(col, row) │ │ • Gradientes de Sobel   │
+                         └─────────────────────┘ └─────────────────────────┘
+                                        │
+                                        ▼
+                         ┌─────────────────────────────────────┐
+                         │       C++20 Color & Chart Core      │
+                         │ • Colorimetría CIELAB (D65)         │
+                         │ • Difusión error Floyd-Steinberg    │
+                         │ • Muestreo Trimmed Mean para PDFs   │
+                         │ • Compensación Peyote / Brick / Loom│
+                         └─────────────────────────────────────┘
 ```
 
 ---

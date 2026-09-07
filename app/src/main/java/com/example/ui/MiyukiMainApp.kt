@@ -8,10 +8,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -28,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,6 +64,33 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
     val earringMaxFringe by viewModel.earringMaxFringe.collectAsStateWithLifecycle()
     val earringMinFringe by viewModel.earringMinFringe.collectAsStateWithLifecycle()
     val earringPalette by viewModel.earringPalette.collectAsStateWithLifecycle()
+
+    val photoTargetCols by viewModel.photoTargetCols.collectAsStateWithLifecycle()
+    val photoTargetRows by viewModel.photoTargetRows.collectAsStateWithLifecycle()
+    val photoBrightness by viewModel.photoBrightness.collectAsStateWithLifecycle()
+    val photoContrast by viewModel.photoContrast.collectAsStateWithLifecycle()
+    val photoDithering by viewModel.photoDithering.collectAsStateWithLifecycle()
+    val photoMaxColors by viewModel.photoMaxColors.collectAsStateWithLifecycle()
+    val isPhotoProcessing by viewModel.isPhotoProcessing.collectAsStateWithLifecycle()
+
+    val pdfSourceBitmap by viewModel.pdfSourceBitmap.collectAsStateWithLifecycle()
+    val pdfPageCount by viewModel.pdfPageCount.collectAsStateWithLifecycle()
+    val pdfCurrentPage by viewModel.pdfCurrentPage.collectAsStateWithLifecycle()
+    val cropLeft by viewModel.cropLeft.collectAsStateWithLifecycle()
+    val cropTop by viewModel.cropTop.collectAsStateWithLifecycle()
+    val cropRight by viewModel.cropRight.collectAsStateWithLifecycle()
+    val cropBottom by viewModel.cropBottom.collectAsStateWithLifecycle()
+    val calibratedCols by viewModel.calibratedCols.collectAsStateWithLifecycle()
+    val calibratedRows by viewModel.calibratedRows.collectAsStateWithLifecycle()
+    val calibratedTechnique by viewModel.calibratedTechnique.collectAsStateWithLifecycle()
+    val calibratedSampleWindow by viewModel.calibratedSampleWindow.collectAsStateWithLifecycle()
+    val calibratedBrightness by viewModel.calibratedBrightness.collectAsStateWithLifecycle()
+    val calibratedContrast by viewModel.calibratedContrast.collectAsStateWithLifecycle()
+    val calibratedMaxColors by viewModel.calibratedMaxColors.collectAsStateWithLifecycle()
+    val isCalibrating by viewModel.isCalibrating.collectAsStateWithLifecycle()
+    val isAutoDetectingGrid by viewModel.isAutoDetectingGrid.collectAsStateWithLifecycle()
+    val chartDocumentName by viewModel.chartDocumentName.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val luaScript by viewModel.luaScript.collectAsStateWithLifecycle()
     val luaConsoleOutput by viewModel.luaConsoleOutput.collectAsStateWithLifecycle()
@@ -103,7 +133,19 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                ),
+                actions = {
+                    IconButton(
+                        onClick = { com.example.util.DebugTools.openLynxLogcat(context) },
+                        modifier = Modifier.testTag("btn_topbar_debug_lynx")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = "Consola de Depuración Lynx (Logcat Móvil)",
+                            tint = MiyukiGoldDark
+                        )
+                    }
+                }
             )
         },
         bottomBar = {
@@ -228,7 +270,50 @@ fun MiyukiMainApp(viewModel: PatternViewModel = viewModel()) {
                         luaConsoleOutput = luaConsoleOutput,
                         onUpdateLuaScript = { viewModel.setLuaScript(it) },
                         onRunLuaScript = { cols, rows -> viewModel.runLuaScriptForGrid(cols, rows) },
-                        onExecuteLuaDirect = { viewModel.executeLuaSnippetDirect(it) }
+                        onExecuteLuaDirect = { viewModel.executeLuaSnippetDirect(it) },
+                        photoTargetCols = photoTargetCols,
+                        photoTargetRows = photoTargetRows,
+                        photoBrightness = photoBrightness,
+                        photoContrast = photoContrast,
+                        photoDithering = photoDithering,
+                        photoMaxColors = photoMaxColors,
+                        isPhotoProcessing = isPhotoProcessing,
+                        onUpdatePhotoParams = { c, r, b, cont, d, m ->
+                            viewModel.updatePhotoParams(c, r, b, cont, d, m)
+                        },
+                        onConvertBitmapToPattern = { bmp, title ->
+                            viewModel.convertBitmapToPattern(bmp, title)
+                        },
+                        pdfSourceBitmap = pdfSourceBitmap,
+                        pdfPageCount = pdfPageCount,
+                        pdfCurrentPage = pdfCurrentPage,
+                        cropLeft = cropLeft,
+                        cropTop = cropTop,
+                        cropRight = cropRight,
+                        cropBottom = cropBottom,
+                        calibratedCols = calibratedCols,
+                        calibratedRows = calibratedRows,
+                        calibratedTechnique = calibratedTechnique,
+                        calibratedSampleWindow = calibratedSampleWindow,
+                        calibratedBrightness = calibratedBrightness,
+                        calibratedContrast = calibratedContrast,
+                        calibratedMaxColors = calibratedMaxColors,
+                        isCalibrating = isCalibrating,
+                        isAutoDetectingGrid = isAutoDetectingGrid,
+                        chartDocumentName = chartDocumentName,
+                        onUpdateCalibrationCrop = { l, t, r, b ->
+                            viewModel.updateCalibrationCrop(l, t, r, b)
+                        },
+                        onUpdateCalibrationSettings = { c, r, tech, w, b, cont, m ->
+                            viewModel.updateCalibrationSettings(c, r, tech, w, b, cont, m)
+                        },
+                        onLoadSamplePdfChart = { viewModel.loadSamplePdfChart() },
+                        onLoadPdfOrImageUri = { uri -> viewModel.loadPdfOrImageUri(context, uri) },
+                        onChangePdfPage = { page -> viewModel.changePdfPage(context, page) },
+                        onAutoDetectGridWithRust = { viewModel.autoDetectGridWithRust() },
+                        onCalibrateAndExtractPattern = { title ->
+                            viewModel.calibrateAndExtractPattern(title)
+                        }
                     )
                 }
 

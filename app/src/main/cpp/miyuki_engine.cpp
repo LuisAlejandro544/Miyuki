@@ -27,6 +27,13 @@ extern "C" {
         int32_t max_count
     );
     int32_t rust_calculate_triangle_decrease_rows(int32_t base_width);
+    int32_t rust_analyze_chart_grid(
+        const uint32_t* pixels,
+        int32_t width,
+        int32_t height,
+        int32_t* out_cols,
+        int32_t* out_rows
+    );
 }
 
 // Global buffer for capturing Lua print() output
@@ -217,4 +224,536 @@ Java_com_example_nativebridge_MiyukiNativeBridge_calculateEarringTriangleRowsRus
 ) {
     // Direct invocation of Rust decrease calculation
     return rust_calculate_triangle_decrease_rows(baseWidth);
+}
+
+// -----------------------------------------------------------------------------
+// Native CIELAB Color Science & Miyuki Delica 11/0 Beads Quantization
+// -----------------------------------------------------------------------------
+
+struct LabColor {
+    float l;
+    float a;
+    float b;
+};
+
+struct MiyukiPaletteEntry {
+    uint32_t argb;
+    float r;
+    float g;
+    float b;
+    LabColor lab;
+};
+
+static inline float srgb_to_linear(float c) {
+    float norm = std::clamp(c / 255.0f, 0.0f, 1.0f);
+    if (norm <= 0.04045f) {
+        return norm / 12.92f;
+    } else {
+        return std::pow((norm + 0.055f) / 1.055f, 2.4f);
+    }
+}
+
+static inline float f_lab(float t) {
+    constexpr float delta = 6.0f / 29.0f;
+    constexpr float delta_cubed = delta * delta * delta;
+    if (t > delta_cubed) {
+        return std::cbrt(t);
+    } else {
+        return t / (3.0f * delta * delta) + 4.0f / 29.0f;
+    }
+}
+
+static LabColor rgb_to_lab(float r, float g, float b) {
+    float r_lin = srgb_to_linear(r);
+    float g_lin = srgb_to_linear(g);
+    float b_lin = srgb_to_linear(b);
+
+    // Standard sRGB to XYZ (D65 illuminant, 2-degree observer)
+    float x = (r_lin * 0.4124564f + g_lin * 0.3575761f + b_lin * 0.1804375f) / 0.95047f;
+    float y = (r_lin * 0.2126729f + g_lin * 0.7151522f + b_lin * 0.0721750f) / 1.00000f;
+    float z = (r_lin * 0.0193339f + g_lin * 0.1191920f + b_lin * 0.9503041f) / 1.08883f;
+
+    float fx = f_lab(x);
+    float fy = f_lab(y);
+    float fz = f_lab(z);
+
+    float l = std::max(0.0f, 116.0f * fy - 16.0f);
+    float a = 500.0f * (fx - fy);
+    float b_val = 200.0f * (fy - fz);
+
+    return { l, a, b_val };
+}
+
+static inline float delta_e_squared(const LabColor& c1, const LabColor& c2) {
+    float dl = c1.l - c2.l;
+    float da = c1.a - c2.a;
+    float db = c1.b - c2.b;
+    return dl * dl + da * da + db * db;
+}
+
+// 20 Official Miyuki Delica 11/0 Beads catalog colors (Hex ARGB)
+static const std::vector<uint32_t>& get_official_miyuki_colors() {
+    static const std::vector<uint32_t> kBeads = {
+        0xFF18171A, // DB-0010 Negro Mate
+        0xFFDFAC38, // DB-0031 Oro 24K Galvanizado
+        0xFFD8DCE0, // DB-0035 Plata Galvanizada
+        0xFFFAF9F6, // DB-0200 Blanco Puro Opaco
+        0xFFECE7DB, // DB-0201 Alabaster Perla
+        0xFF00A4A6, // DB-0651 Turquesa Capri
+        0xFFC62828, // DB-0723 Rojo Rubí Opaco
+        0xFFEE5A3D, // DB-0729 Coral Mandarina
+        0xFF197A52, // DB-0166 Verde Esmeralda
+        0xFF1A367E, // DB-0753 Azul Cobalto Real
+        0xFFEAA6A0, // DB-1530 Rosa Blush Pastel
+        0xFFE09F25, // DB-0410 Mostaza Cálido
+        0xFF7DCFB6, // DB-0656 Menta Pastel
+        0xFF5E3573, // DB-0042 Amatista Púrpura
+        0xFF65493B, // DB-0791 Bronce Metálico
+        0xFFBBA7CD, // DB-1496 Lavanda Suave
+        0xFF58B3C5, // DB-0113 Aguamarina Cielo
+        0xFFF7D138, // DB-0725 Amarillo Canario
+        0xFF437A4B, // DB-0653 Verde Jade Oliva
+        0xFF0D0D0E  // DB-0310 Negro Ónix Brillante
+    };
+    return kBeads;
+}
+
+static const std::vector<MiyukiPaletteEntry>& get_cached_miyuki_palette() {
+    static const std::vector<MiyukiPaletteEntry> kPalette = []() {
+        std::vector<MiyukiPaletteEntry> list;
+        const auto& raw = get_official_miyuki_colors();
+        list.reserve(raw.size());
+        for (uint32_t argb : raw) {
+            float r = static_cast<float>((argb >> 16) & 0xFF);
+            float g = static_cast<float>((argb >> 8) & 0xFF);
+            float b = static_cast<float>(argb & 0xFF);
+            LabColor lab = rgb_to_lab(r, g, b);
+            list.push_back({ argb, r, g, b, lab });
+        }
+        return list;
+    }();
+    return kPalette;
+}
+
+static size_t find_closest_bead_index(float r, float g, float b, const std::vector<MiyukiPaletteEntry>& palette) {
+    LabColor target_lab = rgb_to_lab(r, g, b);
+    float min_dist = std::numeric_limits<float>::max();
+    size_t best_idx = 0;
+
+    for (size_t i = 0; i < palette.size(); ++i) {
+        float dist = delta_e_squared(target_lab, palette[i].lab);
+        if (dist < min_dist) {
+            min_dist = dist;
+            best_idx = i;
+        }
+    }
+    return best_idx;
+}
+
+// Fast and high-quality bilinear interpolation with contrast and brightness adjustment
+static void resample_and_adjust_pixels(
+    const jint* src,
+    int srcW,
+    int srcH,
+    uint32_t* dst,
+    int dstW,
+    int dstH,
+    float brightness,
+    float contrast
+) {
+    auto clamp255 = [](float v) -> uint32_t {
+        if (v < 0.0f) return 0;
+        if (v > 255.0f) return 255;
+        return static_cast<uint32_t>(std::round(v));
+    };
+
+    auto adjust_channel = [contrast, brightness, clamp255](float val) -> uint32_t {
+        float adj = (val - 128.0f) * contrast + 128.0f + brightness;
+        return clamp255(adj);
+    };
+
+    float scaleX = static_cast<float>(srcW) / static_cast<float>(dstW);
+    float scaleY = static_cast<float>(srcH) / static_cast<float>(dstH);
+
+    for (int y = 0; y < dstH; ++y) {
+        float srcY = (y + 0.5f) * scaleY - 0.5f;
+        int y0 = std::clamp(static_cast<int>(std::floor(srcY)), 0, srcH - 1);
+        int y1 = std::clamp(y0 + 1, 0, srcH - 1);
+        float fy = srcY - std::floor(srcY);
+
+        for (int x = 0; x < dstW; ++x) {
+            float srcX = (x + 0.5f) * scaleX - 0.5f;
+            int x0 = std::clamp(static_cast<int>(std::floor(srcX)), 0, srcW - 1);
+            int x1 = std::clamp(x0 + 1, 0, srcW - 1);
+            float fx = srcX - std::floor(srcX);
+
+            uint32_t p00 = static_cast<uint32_t>(src[y0 * srcW + x0]);
+            uint32_t p10 = static_cast<uint32_t>(src[y0 * srcW + x1]);
+            uint32_t p01 = static_cast<uint32_t>(src[y1 * srcW + x0]);
+            uint32_t p11 = static_cast<uint32_t>(src[y1 * srcW + x1]);
+
+            // Bilinear interpolation on R, G, B
+            float r0 = ((p00 >> 16) & 0xFF) * (1.0f - fx) + ((p10 >> 16) & 0xFF) * fx;
+            float r1 = ((p01 >> 16) & 0xFF) * (1.0f - fx) + ((p11 >> 16) & 0xFF) * fx;
+            float r = r0 * (1.0f - fy) + r1 * fy;
+
+            float g0 = ((p00 >> 8) & 0xFF) * (1.0f - fx) + ((p10 >> 8) & 0xFF) * fx;
+            float g1 = ((p01 >> 8) & 0xFF) * (1.0f - fx) + ((p11 >> 8) & 0xFF) * fx;
+            float g = g0 * (1.0f - fy) + g1 * fy;
+
+            float b0 = (p00 & 0xFF) * (1.0f - fx) + (p10 & 0xFF) * fx;
+            float b1 = (p01 & 0xFF) * (1.0f - fx) + (p11 & 0xFF) * fx;
+            float b = b0 * (1.0f - fy) + b1 * fy;
+
+            uint32_t adjR = adjust_channel(r);
+            uint32_t adjG = adjust_channel(g);
+            uint32_t adjB = adjust_channel(b);
+
+            dst[y * dstW + x] = 0xFF000000 | (adjR << 16) | (adjG << 8) | adjB;
+        }
+    }
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_example_nativebridge_MiyukiNativeBridge_convertPhotoToPatternNative(
+    JNIEnv* env,
+    jobject /* this */,
+    jintArray srcPixels,
+    jint srcWidth,
+    jint srcHeight,
+    jint targetCols,
+    jint targetRows,
+    jfloat brightness,
+    jfloat contrast,
+    jboolean useDithering,
+    jint maxColors
+) {
+    if (!srcPixels || srcWidth <= 0 || srcHeight <= 0 || targetCols <= 0 || targetRows <= 0) {
+        return env->NewIntArray(0);
+    }
+
+    jint* rawSrc = env->GetIntArrayElements(srcPixels, nullptr);
+    if (!rawSrc) return env->NewIntArray(0);
+
+    int totalTarget = targetCols * targetRows;
+    std::vector<uint32_t> resizedPixels(totalTarget);
+
+    // 1. Bilinear resampling and brightness/contrast adjustments
+    resample_and_adjust_pixels(
+        rawSrc,
+        srcWidth,
+        srcHeight,
+        resizedPixels.data(),
+        targetCols,
+        targetRows,
+        brightness,
+        contrast
+    );
+
+    env->ReleaseIntArrayElements(srcPixels, rawSrc, JNI_ABORT);
+
+    // 2. Select active palette (if maxColors is set and smaller than catalog, find dominant colors)
+    const auto& full_palette = get_cached_miyuki_palette();
+    std::vector<MiyukiPaletteEntry> active_palette;
+
+    if (maxColors > 0 && static_cast<size_t>(maxColors) < full_palette.size()) {
+        std::vector<int> counts(full_palette.size(), 0);
+        int step = std::max(1, totalTarget / 400);
+        for (int i = 0; i < totalTarget; i += step) {
+            uint32_t px = resizedPixels[i];
+            float r = static_cast<float>((px >> 16) & 0xFF);
+            float g = static_cast<float>((px >> 8) & 0xFF);
+            float b = static_cast<float>(px & 0xFF);
+            size_t best = find_closest_bead_index(r, g, b, full_palette);
+            counts[best]++;
+        }
+
+        std::vector<std::pair<int, size_t>> ranked;
+        ranked.reserve(full_palette.size());
+        for (size_t i = 0; i < full_palette.size(); ++i) {
+            ranked.push_back({ counts[i], i });
+        }
+        std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+            return a.first > b.first;
+        });
+
+        size_t k = std::clamp(static_cast<size_t>(maxColors), size_t(2), full_palette.size());
+        for (size_t i = 0; i < k; ++i) {
+            active_palette.push_back(full_palette[ranked[i].second]);
+        }
+        // Ensure contrast bounds
+        bool has_dark = false;
+        bool has_light = false;
+        for (const auto& p : active_palette) {
+            if (p.lab.l < 30.0f) has_dark = true;
+            if (p.lab.l > 75.0f) has_light = true;
+        }
+        if (!has_dark) active_palette.push_back(full_palette[0]); // DB-0010 Negro Mate
+        if (!has_light) active_palette.push_back(full_palette[3]); // DB-0200 Blanco Puro
+    } else {
+        active_palette = full_palette;
+    }
+
+    // 3. Floyd-Steinberg error diffusion in RGB buffer
+    struct PixelF { float r, g, b; };
+    std::vector<PixelF> rgb_buf(totalTarget);
+    for (int i = 0; i < totalTarget; ++i) {
+        uint32_t px = resizedPixels[i];
+        rgb_buf[i] = {
+            static_cast<float>((px >> 16) & 0xFF),
+            static_cast<float>((px >> 8) & 0xFF),
+            static_cast<float>(px & 0xFF)
+        };
+    }
+
+    std::vector<uint32_t> outBeads(totalTarget);
+
+    for (int y = 0; y < targetRows; ++y) {
+        for (int x = 0; x < targetCols; ++x) {
+            int idx = y * targetCols + x;
+            float r = std::clamp(rgb_buf[idx].r, 0.0f, 255.0f);
+            float g = std::clamp(rgb_buf[idx].g, 0.0f, 255.0f);
+            float b = std::clamp(rgb_buf[idx].b, 0.0f, 255.0f);
+
+            size_t best_idx = find_closest_bead_index(r, g, b, active_palette);
+            const auto& chosen = active_palette[best_idx];
+            outBeads[idx] = chosen.argb;
+
+            if (useDithering) {
+                float err_r = r - chosen.r;
+                float err_g = g - chosen.g;
+                float err_b = b - chosen.b;
+
+                // Floyd-Steinberg error distribution:
+                // (x + 1, y)     += err * 7/16
+                // (x - 1, y + 1) += err * 3/16
+                // (x,     y + 1) += err * 5/16
+                // (x + 1, y + 1) += err * 1/16
+
+                if (x + 1 < targetCols) {
+                    int n_idx = idx + 1;
+                    rgb_buf[n_idx].r += err_r * (7.0f / 16.0f);
+                    rgb_buf[n_idx].g += err_g * (7.0f / 16.0f);
+                    rgb_buf[n_idx].b += err_b * (7.0f / 16.0f);
+                }
+                if (y + 1 < targetRows) {
+                    if (x > 0) {
+                        int n_idx = (y + 1) * targetCols + (x - 1);
+                        rgb_buf[n_idx].r += err_r * (3.0f / 16.0f);
+                        rgb_buf[n_idx].g += err_g * (3.0f / 16.0f);
+                        rgb_buf[n_idx].b += err_b * (3.0f / 16.0f);
+                    }
+                    {
+                        int n_idx = (y + 1) * targetCols + x;
+                        rgb_buf[n_idx].r += err_r * (5.0f / 16.0f);
+                        rgb_buf[n_idx].g += err_g * (5.0f / 16.0f);
+                        rgb_buf[n_idx].b += err_b * (5.0f / 16.0f);
+                    }
+                    if (x + 1 < targetCols) {
+                        int n_idx = (y + 1) * targetCols + (x + 1);
+                        rgb_buf[n_idx].r += err_r * (1.0f / 16.0f);
+                        rgb_buf[n_idx].g += err_g * (1.0f / 16.0f);
+                        rgb_buf[n_idx].b += err_b * (1.0f / 16.0f);
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Return native result directly to Kotlin
+    jintArray result = env->NewIntArray(totalTarget);
+    env->SetIntArrayRegion(result, 0, totalTarget, reinterpret_cast<const jint*>(outBeads.data()));
+    return result;
+}
+
+// -------------------------------------------------------------
+// PDF & CHART PATTERN CALIBRATION & SAMPLING ENGINE
+// -------------------------------------------------------------
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_example_nativebridge_MiyukiNativeBridge_analyzeChartGridRustNative(
+    JNIEnv* env,
+    jobject /* this */,
+    jintArray srcPixels,
+    jint width,
+    jint height
+) {
+    if (!srcPixels || width < 20 || height < 20) {
+        jintArray fallback = env->NewIntArray(2);
+        jint defVals[2] = {20, 40};
+        env->SetIntArrayRegion(fallback, 0, 2, defVals);
+        return fallback;
+    }
+
+    jint* pixels = env->GetIntArrayElements(srcPixels, nullptr);
+    int32_t detected_cols = 20;
+    int32_t detected_rows = 40;
+
+    rust_analyze_chart_grid(
+        reinterpret_cast<const uint32_t*>(pixels),
+        width,
+        height,
+        &detected_cols,
+        &detected_rows
+    );
+
+    env->ReleaseIntArrayElements(srcPixels, pixels, JNI_ABORT);
+
+    jintArray result = env->NewIntArray(2);
+    jint vals[2] = {detected_cols, detected_rows};
+    env->SetIntArrayRegion(result, 0, 2, vals);
+    return result;
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_example_nativebridge_MiyukiNativeBridge_calibrateAndSamplePatternNative(
+    JNIEnv* env,
+    jobject /* this */,
+    jintArray srcPixels,
+    jint srcWidth,
+    jint srcHeight,
+    jint targetCols,
+    jint targetRows,
+    jint technique, // 0: Loom/Square, 1: Peyote, 2: Brick Stitch
+    jfloat sampleWindowRatio,
+    jfloat brightness,
+    jfloat contrast,
+    jint maxColors
+) {
+    if (!srcPixels || srcWidth <= 0 || srcHeight <= 0 || targetCols <= 0 || targetRows <= 0) {
+        return env->NewIntArray(0);
+    }
+
+    int totalTarget = targetCols * targetRows;
+    jint* pixels = env->GetIntArrayElements(srcPixels, nullptr);
+
+    float cellW = static_cast<float>(srcWidth) / static_cast<float>(targetCols);
+    float cellH = static_cast<float>(srcHeight) / static_cast<float>(targetRows);
+    float winRatio = std::clamp(sampleWindowRatio, 0.20f, 0.85f);
+    float halfWinW = (cellW * winRatio) * 0.5f;
+    float halfWinH = (cellH * winRatio) * 0.5f;
+
+    std::vector<uint32_t> outBeads(totalTarget);
+    std::unordered_map<uint32_t, int> colorFrequency;
+
+    for (int r = 0; r < targetRows; ++r) {
+        for (int c = 0; c < targetCols; ++c) {
+            // Apply technique-based offset (staggering)
+            float offsetX = 0.0f;
+            float offsetY = 0.0f;
+
+            if (technique == 1) {
+                // Peyote: vertical columns alternate half-step
+                offsetY = (c % 2 == 1) ? (cellH * 0.5f) : 0.0f;
+            } else if (technique == 2) {
+                // Brick stitch: horizontal rows alternate half-step
+                offsetX = (r % 2 == 1) ? (cellW * 0.5f) : 0.0f;
+            }
+
+            float cx = (c + 0.5f) * cellW + offsetX;
+            float cy = (r + 0.5f) * cellH + offsetY;
+
+            int minX = std::max(0, static_cast<int>(cx - halfWinW));
+            int maxX = std::min(srcWidth - 1, static_cast<int>(cx + halfWinW));
+            int minY = std::max(0, static_cast<int>(cy - halfWinH));
+            int maxY = std::min(srcHeight - 1, static_cast<int>(cy + halfWinH));
+
+            // Accumulate RGB within central window (trimmed mean to reject black grid line pixels)
+            struct Sample { float r, g, b, lum; };
+            std::vector<Sample> samples;
+            samples.reserve((maxX - minX + 1) * (maxY - minY + 1));
+
+            for (int py = minY; py <= maxY; ++py) {
+                int rowIdx = py * srcWidth;
+                for (int px = minX; px <= maxX; ++px) {
+                    uint32_t p = static_cast<uint32_t>(pixels[rowIdx + px]);
+                    float pr = static_cast<float>((p >> 16) & 0xFF);
+                    float pg = static_cast<float>((p >> 8) & 0xFF);
+                    float pb = static_cast<float>(p & 0xFF);
+                    float lum = 0.299f * pr + 0.587f * pg + 0.114f * pb;
+                    samples.push_back({pr, pg, pb, lum});
+                }
+            }
+
+            float avgR = 250.0f, avgG = 250.0f, avgB = 250.0f;
+            if (!samples.empty()) {
+                // Sort by luminance and discard bottom/top 15% to eliminate grid lines and paper glare
+                std::sort(samples.begin(), samples.end(), [](const Sample& a, const Sample& b) {
+                    return a.lum < b.lum;
+                });
+                size_t discardCount = samples.size() > 6 ? (samples.size() * 15 / 100) : 0;
+                size_t start = discardCount;
+                size_t end = samples.size() - discardCount;
+                if (start >= end) { start = 0; end = samples.size(); }
+
+                float sumR = 0.0f, sumG = 0.0f, sumB = 0.0f;
+                for (size_t i = start; i < end; ++i) {
+                    sumR += samples[i].r;
+                    sumG += samples[i].g;
+                    sumB += samples[i].b;
+                }
+                size_t validCount = end - start;
+                avgR = sumR / validCount;
+                avgG = sumG / validCount;
+                avgB = sumB / validCount;
+            }
+
+            // Apply contrast & brightness
+            avgR = std::clamp(((avgR - 128.0f) * contrast) + 128.0f + brightness, 0.0f, 255.0f);
+            avgG = std::clamp(((avgG - 128.0f) * contrast) + 128.0f + brightness, 0.0f, 255.0f);
+            avgB = std::clamp(((avgB - 128.0f) * contrast) + 128.0f + brightness, 0.0f, 255.0f);
+
+            // CIELAB match to Delica palette
+            const auto& full_delica_palette = get_cached_miyuki_palette();
+            size_t best_idx = find_closest_bead_index(avgR, avgG, avgB, full_delica_palette);
+            uint32_t chosenArgb = full_delica_palette[best_idx].argb;
+
+            int beadIdx = r * targetCols + c;
+            outBeads[beadIdx] = chosenArgb;
+            colorFrequency[chosenArgb]++;
+        }
+    }
+
+    env->ReleaseIntArrayElements(srcPixels, pixels, JNI_ABORT);
+
+    // If maxColors is specified, reduce noise by mapping low-frequency beads to the top N colors
+    if (maxColors > 0 && static_cast<int>(colorFrequency.size()) > maxColors) {
+        std::vector<std::pair<uint32_t, int>> freqList(colorFrequency.begin(), colorFrequency.end());
+        std::sort(freqList.begin(), freqList.end(), [](const auto& a, const auto& b) {
+            return a.second > b.second;
+        });
+
+        const auto& full_delica_palette = get_cached_miyuki_palette();
+        std::vector<MiyukiPaletteEntry> topPalette;
+        for (int i = 0; i < maxColors && i < static_cast<int>(freqList.size()); ++i) {
+            uint32_t argb = freqList[i].first;
+            for (const auto& d : full_delica_palette) {
+                if (d.argb == argb) {
+                    topPalette.push_back(d);
+                    break;
+                }
+            }
+        }
+
+        if (!topPalette.empty()) {
+            for (int i = 0; i < totalTarget; ++i) {
+                uint32_t cur = outBeads[i];
+                bool isTop = false;
+                for (const auto& tp : topPalette) {
+                    if (tp.argb == cur) { isTop = true; break; }
+                }
+                if (!isTop) {
+                    float r = static_cast<float>((cur >> 16) & 0xFF);
+                    float g = static_cast<float>((cur >> 8) & 0xFF);
+                    float b = static_cast<float>(cur & 0xFF);
+                    size_t best = find_closest_bead_index(r, g, b, topPalette);
+                    outBeads[i] = topPalette[best].argb;
+                }
+            }
+        }
+    }
+
+    jintArray result = env->NewIntArray(totalTarget);
+    env->SetIntArrayRegion(result, 0, totalTarget, reinterpret_cast<const jint*>(outBeads.data()));
+    return result;
 }

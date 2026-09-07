@@ -34,12 +34,22 @@ Este documento describe la planificación de versiones, objetivos técnicos y ev
 
 ---
 
-## 🚀 Versión 1.1: Conversión de Imágenes y Exportación Avanzada (Próxima)
+## 🚀 Versión 1.1: Conversión de Imágenes y Calibración de Documentos (Completada)
 
-- [ ] **Conversor Fotográfico a Patrón de Cuentas (C++ / Rust)**:
-  - [ ] Selector de imágenes local mediante Android Photo Picker (sin permisos invasivos).
-  - [ ] Algoritmo de cuantización de color (K-Means y Dithering Floyd-Steinberg) implementado en C++ nativo para alto rendimiento en teléfonos modestos.
-  - [ ] Asignación automática al código más cercano del catálogo Miyuki Delica 11/0 mediante distancia euclidiana en espacio CIELAB.
+- [x] **Conversor Fotográfico a Patrón de Cuentas (C++20 Nativo)**:
+  - [x] Selector de imágenes local mediante Android Photo Picker (cero permisos invasivos).
+  - [x] Algoritmo de cuantización de color en C++20 con dithering Floyd-Steinberg y ajuste dinámico de brillo/contraste.
+  - [x] Asignación cromática de alta fidelidad al catálogo oficial Miyuki Delica 11/0 mediante distancia perceptual en espacio CIELAB (D65).
+- [x] **Importador y Calibrador de Documentos PDF y Gráficos (Rust + C++20)**:
+  - [x] Rasterización nativa de archivos PDF de patrones (Etsy, Pinterest, revistas) con `PdfRenderer` sin dependencias externas.
+  - [x] Encuadre táctil interactivo con previsualización en Canvas de la cuadrícula calibrada.
+  - [x] Detección automática de columnas y filas con motor **Rust** (`miyuki_rust`) mediante cálculo de gradientes y autocorrelación.
+  - [x] Muestreo inteligente de color en C++20 con ventana central de cuenta (*Trimmed Mean*) para descartar líneas impresas y reflejos.
+  - [x] Mapeo con compensación de técnica (Peyote, Telar y Brick Stitch).
+- [x] **Herramientas de Depuración Móvil In-App (Desarrollo sin PC ni ADB)**:
+  - [x] Consola interactiva **Lynx** para monitorizar Logcat, trazas C++20, Rust, Lua y excepciones de Kotlin directamente en el móvil.
+  - [x] Integración de **LeakCanary 2.14** para detección automática de fugas de memoria y retención indebida de Bitmaps de PDF.
+  - [x] Acceso directo a Lynx desde la barra superior y desde el estudio de Lua.
 - [ ] **Generador de Fichas de Trabajo en PDF**:
   - [ ] Generación de documentos PDF vectoriales con la cuadrícula numerada lista para imprimir.
   - [ ] Tabla de consumo de materiales desglosada por código de delica, color y cantidad exacta de piezas.

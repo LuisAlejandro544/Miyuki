@@ -128,6 +128,13 @@ dependencies {
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
+
+  // In-app Debugging Tools (Mobile phone development without PC/ADB)
+  implementation("com.github.pedrovgs:lynx:1.1.0") {
+    exclude(group = "com.android.support")
+  }
+  debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
+
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

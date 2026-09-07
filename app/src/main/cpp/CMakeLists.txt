@@ -29,24 +29,28 @@ set(RUST_LIB "${RUST_DIR}/target/${RUST_TARGET}/release/libmiyuki_rust.a")
 
 set(CARGO_BIN "/root/.cargo/bin/cargo")
 if(NOT EXISTS "${CARGO_BIN}")
-    find_program(CARGO_BIN cargo REQUIRED)
+    find_program(CARGO_BIN cargo)
 endif()
 
-# Build Rust library automatically before linking
-add_custom_command(
-    OUTPUT "${RUST_LIB}"
-    COMMAND ${CMAKE_COMMAND} -E env
-        "CARGO_HOME=/root/.cargo"
-        "RUSTUP_HOME=/root/.rustup"
-        "PATH=/root/.cargo/bin:$ENV{PATH}"
-        "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=/opt/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
-        "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=/opt/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
-        ${CARGO_BIN} build --manifest-path "${RUST_DIR}/Cargo.toml" --target ${RUST_TARGET} --release
-    WORKING_DIRECTORY "${RUST_DIR}"
-    COMMENT "Compiling Rust Miyuki Geometry & Earring Engine for ${RUST_TARGET}..."
-)
-
-add_custom_target(build_miyuki_rust DEPENDS "${RUST_LIB}")
+# Build Rust library automatically before linking if cargo is available
+if(CARGO_BIN)
+    add_custom_command(
+        OUTPUT "${RUST_LIB}"
+        COMMAND ${CMAKE_COMMAND} -E env
+            "CARGO_HOME=/root/.cargo"
+            "RUSTUP_HOME=/root/.rustup"
+            "PATH=/root/.cargo/bin:$ENV{PATH}"
+            "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=/opt/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+            "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=/opt/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
+            ${CARGO_BIN} build --manifest-path "${RUST_DIR}/Cargo.toml" --target ${RUST_TARGET} --release
+        WORKING_DIRECTORY "${RUST_DIR}"
+        COMMENT "Compiling Rust Miyuki Geometry & Earring Engine for ${RUST_TARGET}..."
+    )
+    add_custom_target(build_miyuki_rust DEPENDS "${RUST_LIB}")
+else()
+    message(STATUS "Cargo not found; using existing Rust binary at ${RUST_LIB}")
+    add_custom_target(build_miyuki_rust)
+endif()
 
 add_library(miyuki_rust STATIC IMPORTED GLOBAL)
 set_target_properties(miyuki_rust PROPERTIES IMPORTED_LOCATION "${RUST_LIB}")
